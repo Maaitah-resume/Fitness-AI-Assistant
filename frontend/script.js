@@ -1,5 +1,6 @@
 // Basic chat client for the Fitness AI Assistant (no persistent history)
 const API_URL = window.location.origin + "/chat";
+const STORAGE_KEY = "fitness_ai_chat_history";
 
 // Keep an in-memory array so we can re-render if needed
 const chatMessages = [];
