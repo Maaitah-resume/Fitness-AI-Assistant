@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
             sendMessage();
         }
     });
-    
+
     // Focus input on load
     input.focus();
 });
