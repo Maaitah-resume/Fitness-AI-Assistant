@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 import re
+from typing import List
 
 from .config import GOOGLE_GEMINI_API_KEY, GEMINI_MODEL_NAME
 from .utils.logger import log_conv as log_conversation
@@ -11,6 +12,7 @@ from .agents.fitness_tools import (
     calculate_body_fat, calculate_ideal_weight, calculate_protein_needs,
     calculate_water_intake, calculate_heart_rate_zones, calculate_macros
 )
+from .chat_models import ChatMessage
 
 
 # Configure Gemini client
@@ -381,7 +383,19 @@ def try_handle_tool_commands(user_message: str) -> str | None:
     return None
 
 
-def generate_response(user_message: str) -> str:
+def _build_conversation_prompt(conversation: List[ChatMessage]) -> str:
+    """Combine system prompt with full chat history for grounded answers."""
+    prompt_lines = [SYSTEM_PROMPT, ""]
+
+    for message in conversation:
+        role_label = "User" if message.role == "user" else "Assistant"
+        prompt_lines.append(f"{role_label}: {message.content}")
+
+    prompt_lines.append("Assistant:")
+    return "\n".join(prompt_lines)
+
+
+def generate_response(user_message: str, history: List[ChatMessage] | None = None) -> tuple[str, List[ChatMessage]]:
     """
     Main function called by the API.
 
@@ -389,16 +403,23 @@ def generate_response(user_message: str) -> str:
     2. If yes, use the tool and return its answer.
     3. If no, send the message to the LLM with the system prompt.
     4. Log the conversation.
+    5. Return the assistant reply along with updated history so callers stay in sync.
     """
+    # Normalize incoming history to avoid mutating caller-owned lists.
+    conversation_history = list(history or [])
+
+    # Add the newest user message to the working history used for tools and LLM context.
+    conversation_history.append(ChatMessage(role="user", content=user_message))
     # 1) Try tool commands first
     tool_reply = try_handle_tool_commands(user_message)
     if tool_reply is not None:
         log_conversation(user_message, tool_reply)
-        return tool_reply
+        conversation_history.append(ChatMessage(role="assistant", content=tool_reply))
+        return tool_reply, conversation_history
 
     # 2) Normal LLM-based chat with Gemini
-    # Combine system prompt with user message
-    full_prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nAssistant:"
+    # Combine system prompt with the entire conversation so Gemini has context.
+    full_prompt = _build_conversation_prompt(conversation_history)
     
     model = get_client()
     response = model.generate_content(
@@ -413,4 +434,7 @@ def generate_response(user_message: str) -> str:
     # 3) Log conversation
     log_conversation(user_message, assistant_message)
 
-    return assistant_message
+    # 4) Track assistant response in the returned history so the frontend can persist it.
+    conversation_history.append(ChatMessage(role="assistant", content=assistant_message))
+
+    return assistant_message, conversation_history
