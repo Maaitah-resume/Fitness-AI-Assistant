@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 import os
 
 from .chat_logic import generate_response
+from .chat_models import ChatRequest, ChatResponse
 
 
 app = FastAPI(title="Fitness AI Assistant", version="1.0.0")
@@ -23,14 +23,6 @@ app.add_middleware(
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-
-
-class ChatRequest(BaseModel):
-    message: str
-
-
-class ChatResponse(BaseModel):
-    reply: str
 
 
 @app.post("/chat", response_model=ChatResponse)
