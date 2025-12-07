@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     input.focus();
 });
 
-function addMessage(text, role, isError = false, skipSave = false) {
+function addMessage(text, sender, isError = false, skipSave = false) {
     const chatBox = document.getElementById("chat-box");
 
     // Remove welcome message if it exists
