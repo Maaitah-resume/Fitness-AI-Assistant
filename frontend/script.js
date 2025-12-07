@@ -1,83 +1,65 @@
-// Auto-detect API URL based on current host
+// Basic chat client for the Fitness AI Assistant (no persistent history)
 const API_URL = window.location.origin + "/chat";
 
-// Initialize - add Enter key support
-document.addEventListener('DOMContentLoaded', function() {
+// Keep an in-memory array so we can re-render if needed
+const chatMessages = [];
+
+window.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("user-input");
     const sendBtn = document.getElementById("send-btn");
-    
-    input.addEventListener("keypress", function(e) {
+    const closeBtn = document.getElementById("close-chat");
+
+    // Seed with a welcome message
+    addMessage("Hi! I'm your Gym Club chatbot. Ask me about workouts, nutrition, or quick calculations like `bmi 70 175`.", "assistant");
+
+    input.addEventListener("keypress", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
-    
-    // Focus input on load
-    input.focus();
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    closeBtn.addEventListener("click", () => {
+        document.querySelector(".chat-window").classList.toggle("minimized");
+    });
 });
 
-function addMessage(text, sender, isError = false) {
-    const chatBox = document.getElementById("chat-box");
-    
-    // Remove welcome message if it exists
-    const welcomeMsg = chatBox.querySelector(".welcome-msg");
-    if (welcomeMsg) {
-        welcomeMsg.remove();
-    }
-    
-    const messageDiv = document.createElement("div");
-    messageDiv.className = `message ${sender}-msg`;
-    
-    const avatar = document.createElement("div");
-    avatar.className = "message-avatar";
-    avatar.textContent = sender === "user" ? "👤" : "🤖";
-    
-    const content = document.createElement("div");
-    content.className = `message-content ${isError ? "error-msg" : ""}`;
-    
-    // Format text with line breaks
-    content.innerHTML = formatMessage(text);
-    
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(content);
-    
-    chatBox.appendChild(messageDiv);
-    chatBox.scrollTop = chatBox.scrollHeight;
-}
+function addMessage(text, role) {
+    const chatArea = document.getElementById("chat-area");
+    const row = document.createElement("div");
+    row.className = `message-row ${role}`;
 
-function formatMessage(text) {
-    // Convert line breaks to <br>
-    let formatted = text.replace(/\n/g, "<br>");
-    
-    // Format numbered lists
-    formatted = formatted.replace(/(\d+\.\s+[^\n]+)/g, "<div style='margin: 4px 0; padding-left: 10px;'>$1</div>");
-    
-    // Format bold text (**text**)
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    
-    // Format code-like text (backticks)
-    formatted = formatted.replace(/`([^`]+)`/g, "<code style='background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;'>$1</code>");
-    
-    return formatted;
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = role === "user" ? "🙂" : "💪";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble fade-in";
+    bubble.innerHTML = formatMessage(text);
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chatArea.appendChild(row);
+
+    chatMessages.push({ role, content: text });
+    chatArea.scrollTop = chatArea.scrollHeight;
 }
 
 function setLoading(isLoading) {
     const sendBtn = document.getElementById("send-btn");
-    const sendText = document.getElementById("send-text");
-    const spinner = document.getElementById("loading-spinner");
     const input = document.getElementById("user-input");
-    
+    const icon = document.getElementById("send-icon");
+
     if (isLoading) {
         sendBtn.disabled = true;
-        sendText.style.display = "none";
-        spinner.style.display = "inline";
         input.disabled = true;
+        icon.classList.add("spinning");
     } else {
         sendBtn.disabled = false;
-        sendText.style.display = "inline";
-        spinner.style.display = "none";
         input.disabled = false;
+        icon.classList.remove("spinning");
         input.focus();
     }
 }
@@ -85,49 +67,39 @@ function setLoading(isLoading) {
 async function sendMessage() {
     const input = document.getElementById("user-input");
     const text = input.value.trim();
-    
+
     if (!text) return;
-    
+
     addMessage(text, "user");
     input.value = "";
     setLoading(true);
-    
-    const payload = {
-        message: text
-    };
-    
+
     try {
         const response = await fetch(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ message: text })
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        addMessage(data.reply, "ai");
-        
+        addMessage(data.reply, "assistant");
     } catch (error) {
-        console.error("Error:", error);
-        let errorMsg = "Error: Could not connect to the backend server.";
-        
-        if (error.message.includes("Failed to fetch")) {
-            errorMsg += "<br><br>Make sure the backend server is running on <code>http://localhost:8000</code>";
-        } else {
-            errorMsg += `<br><br>${error.message}`;
-        }
-        
-        addMessage(errorMsg, "ai", true);
+        const hint = error.message.includes("Failed to fetch")
+            ? "Make sure the backend is running on http://localhost:8000."
+            : error.message;
+        addMessage(`Error: ${hint}`, "assistant");
     } finally {
         setLoading(false);
     }
 }
 
-function sendQuickMessage(message) {
-    const input = document.getElementById("user-input");
-    input.value = message;
-    sendMessage();
+function formatMessage(text) {
+    let formatted = text.replace(/\n/g, "<br>");
+    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    formatted = formatted.replace(/`([^`]+)`/g, "<code>$1</code>");
+    return formatted;
 }
