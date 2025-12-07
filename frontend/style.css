@@ -190,7 +190,8 @@ header {
     word-break: break-word;
 }
 
-.input-area {
+.input-bar {
+    padding: 12px;
     display: flex;
     gap: 10px;
     background: #f0f4fb;
