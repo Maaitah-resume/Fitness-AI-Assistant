@@ -80,12 +80,15 @@ def calculate_protein_needs(weight_kg: float, activity_level: str = "moderate") 
     
     # Activity multipliers
     multipliers = {
-        "sedentary": 1.0,
-        "moderate": 1.2,
-        "active": 1.4,
-        "very_active": 1.6,
-        "athlete": 2.0
-    }
+    "sedentary": 1.0,
+    "moderate": 1.2,
+    "active": 1.4,
+    "very_active": 1.6,
+    "athlete": 2.0,
+    "bodybuilder": 2.2,
+    "cutting_phase": 1.8,
+}
+
     
     multiplier = multipliers.get(activity_level.lower(), 1.2)
     protein_grams = round(base_protein * multiplier, 1)
@@ -105,12 +108,15 @@ def calculate_water_intake(weight_kg: float, activity_level: str = "moderate") -
     
     # Activity adjustments (additional ml per hour of activity)
     activity_additions = {
-        "sedentary": 0,
-        "moderate": 500,
-        "active": 1000,
-        "very_active": 1500,
-        "athlete": 2000
-    }
+    "sedentary": 0,
+    "moderate": 500,
+    "active": 1000,
+    "very_active": 1500,
+    "athlete": 2000,
+    "hot_weather": 800,
+    "intense_training": 2000,
+}
+
     
     additional = activity_additions.get(activity_level.lower(), 500)
     total_ml = base_water_ml + additional
@@ -132,33 +138,14 @@ def calculate_heart_rate_zones(age: int) -> dict:
     max_hr = 220 - age
     resting_hr = 60  # Average resting heart rate
     
-    zones = {
-        "resting": {
-            "min": resting_hr,
-            "max": round(max_hr * 0.5),
-            "description": "Rest and recovery"
-        },
-        "fat_burn": {
-            "min": round(max_hr * 0.5),
-            "max": round(max_hr * 0.6),
-            "description": "Fat burning zone"
-        },
-        "cardio": {
-            "min": round(max_hr * 0.6),
-            "max": round(max_hr * 0.7),
-            "description": "Cardiovascular training"
-        },
-        "aerobic": {
-            "min": round(max_hr * 0.7),
-            "max": round(max_hr * 0.85),
-            "description": "Aerobic endurance"
-        },
-        "anaerobic": {
-            "min": round(max_hr * 0.85),
-            "max": max_hr,
-            "description": "Anaerobic threshold"
-        }
-    }
+    zones ={
+    "resting": { "min": 60, "max": round(max_hr * 0.5), "description": "Rest and recovery" },
+    "fat_burn": { "min": round(max_hr * 0.5), "max": round(max_hr * 0.6), "description": "Fat burning zone" },
+    "cardio":   { "min": round(max_hr * 0.6), "max": round(max_hr * 0.7), "description": "Cardio endurance" },
+    "aerobic":  { "min": round(max_hr * 0.7), "max": round(max_hr * 0.85), "description": "Aerobic training" },
+    "anaerobic":{ "min": round(max_hr * 0.85), "max": max_hr, "description": "Near-max training" },
+    "vo2_max":  { "min": max_hr - 5, "max": max_hr, "description": "Elite conditioning" }
+}
     
     return {
         "max_heart_rate": max_hr,
