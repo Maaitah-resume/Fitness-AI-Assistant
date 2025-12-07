@@ -3,77 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fitness AI Assistant</title>
+    <title>Gym Club Chatbot</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Fitness AI Assistant</h1>
-            <p class="subtitle">Your personal fitness coach powered by AI</p>
-        </header>
+    <main class="page-bg">
+        <section class="chat-window" aria-label="Gym Club Chatbot">
+            <header class="chat-header">
+                <div class="brand">
+                    <div class="logo" aria-hidden="true">🏋️</div>
+                    <div class="title-text">
+                        <h1>Gym Club Chatbot</h1>
+                        <p>Ask anything about fitness, training, or nutrition</p>
+                    </div>
+                </div>
+                <button id="close-chat" class="close-btn" aria-label="Minimize chat">×</button>
+            </header>
 
-        <div id="chat-box">
-            <div class="welcome-msg">
-                <p>Welcome! I'm your Fitness AI Assistant. I can help you with:</p>
-                <ul>
-                    <li>Calculate your BMI</li>
-                    <li>Daily calorie calculations</li>
-                    <li>Meal calorie estimates</li>
-                    <li>Workout plan suggestions</li>
-                    <li>Workout duration calculations</li>
-                    <li>Body fat percentage</li>
-                    <li>Ideal weight calculation</li>
-                    <li>Protein intake recommendations</li>
-                    <li>Water intake calculator</li>
-                    <li>Heart rate zones</li>
-                    <li>Macro nutrient calculator</li>
-                </ul>
-                <p><strong>Quick Commands:</strong></p>
-                <ul style="margin-top: 10px;">
-                    <li><code>bmi 70 175</code> - Calculate BMI</li>
-                    <li><code>calories 70 175 30 male medium</code> - Daily calories</li>
-                    <li><code>meal calories apple chicken breast</code> - Meal calories</li>
-                    <li><code>workout weight loss beginner</code> - Workout plan</li>
-                    <li><code>duration 3 10 60</code> - Workout duration</li>
-                    <li><code>bodyfat 70 175 30 male</code> - Body fat percentage</li>
-                    <li><code>idealweight 175 male</code> - Ideal weight range</li>
-                    <li><code>protein 70</code> - Daily protein needs</li>
-                    <li><code>water 70</code> - Daily water intake</li>
-                    <li><code>heartrate 30</code> - Heart rate zones</li>
-                    <li><code>macros 2000</code> - Macro breakdown</li>
-                </ul>
-                <p style="margin-top: 10px;">Or just ask me anything about fitness!</p>
+            <div id="chat-area" class="chat-area" role="log" aria-live="polite"></div>
+
+            <div class="input-bar">
+                <input
+                    id="user-input"
+                    type="text"
+                    placeholder="Type a message..."
+                    autocomplete="off"
+                    aria-label="Chat message"
+                >
+                <button id="send-btn" aria-label="Send message">
+                    <span id="send-icon">✈️</span>
+                </button>
             </div>
-        </div>
-
-        <div class="quick-actions">
-            <button class="quick-btn" onclick="sendQuickMessage('bmi 70 175')">BMI</button>
-            <button class="quick-btn" onclick="sendQuickMessage('calories 70 175 30 male medium')">Calories</button>
-            <button class="quick-btn" onclick="sendQuickMessage('meal calories apple chicken breast rice')">Meal</button>
-            <button class="quick-btn" onclick="sendQuickMessage('workout weight loss beginner')">Workout</button>
-            <button class="quick-btn" onclick="sendQuickMessage('duration 3 10 60')">Duration</button>
-            <button class="quick-btn" onclick="sendQuickMessage('bodyfat 70 175 30 male')">Body Fat</button>
-            <button class="quick-btn" onclick="sendQuickMessage('idealweight 175 male')">Ideal Weight</button>
-            <button class="quick-btn" onclick="sendQuickMessage('protein 70')">Protein</button>
-            <button class="quick-btn" onclick="sendQuickMessage('water 70')">Water</button>
-            <button class="quick-btn" onclick="sendQuickMessage('heartrate 30')">Heart Rate</button>
-            <button class="quick-btn" onclick="sendQuickMessage('macros 2000')">Macros</button>
-        </div>
-
-        <div class="input-area">
-            <input 
-                type="text" 
-                id="user-input" 
-                placeholder="Ask me anything about fitness..." 
-                autocomplete="off"
-            >
-            <button id="send-btn" onclick="sendMessage()">
-                <span id="send-text">Send</span>
-                <span id="loading-spinner" class="spinner" style="display: none;">...</span>
-            </button>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script src="/static/script.js"></script>
 </body>
