@@ -9,8 +9,15 @@
 <body>
     <div class="container">
         <header>
-            <h1>Fitness AI Assistant</h1>
-            <p class="subtitle">Your personal fitness coach powered by AI</p>
+            <div class="title-block">
+                <h1>Fitness AI Assistant</h1>
+                <p class="subtitle">Your personal fitness coach powered by AI</p>
+            </div>
+            <div class="header-actions">
+                <button id="history-toggle" class="ghost-btn" type="button" aria-label="Open chat history" onclick="toggleHistoryDrawer()">
+                    Chat History
+                </button>
+            </div>
         </header>
 
         <div id="chat-box">
@@ -58,6 +65,20 @@
                 <span id="send-text">Send</span>
                 <span id="loading-spinner" class="spinner" style="display: none;">...</span>
             </button>
+        </div>
+
+        <div id="history-drawer" class="history-drawer" aria-hidden="true">
+            <div class="history-header">
+                <div>
+                    <h2>Saved chat history</h2>
+                    <p class="history-subtitle">Messages saved locally in your browser</p>
+                </div>
+                <div class="history-actions">
+                    <button class="ghost-btn" type="button" onclick="clearHistory()">Clear</button>
+                    <button class="ghost-btn" type="button" onclick="toggleHistoryDrawer()">Close</button>
+                </div>
+            </div>
+            <div id="history-list" class="history-list"></div>
         </div>
     </div>
 
