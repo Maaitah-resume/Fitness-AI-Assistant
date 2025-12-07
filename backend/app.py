@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 import os
 
 from .chat_logic import generate_response
-from .chat_models import ChatRequest, ChatResponse
+from .chat_models import ChatMessage, ChatRequest, ChatResponse
 
 
 app = FastAPI(title="Fitness AI Assistant", version="1.0.0")
@@ -32,8 +32,9 @@ def chat_endpoint(req: ChatRequest):
     Body: { "message": "your text here" }
     Returns: { "reply": "assistant's answer" }
     """
-    reply = generate_response(req.message)
-    return ChatResponse(reply=reply)
+    # Always keep history optional so existing simple requests continue to work.
+    reply, updated_history = generate_response(req.message, req.history or [])
+    return ChatResponse(reply=reply, history=updated_history)
 
 
 @app.get("/")
