@@ -123,15 +123,15 @@ def try_handle_meal_calories_command(user_message: str) -> str | None:
 
     try:
         total_calories = estimate_meal_calories(items)
-        found_items = [item for item in items if item.lower() in ["apple", "banana", "chicken breast", "rice", "salad"]]
-        unknown_items = [item for item in items if item.lower() not in ["apple", "banana", "chicken breast", "rice", "salad"]]
+        known_items = set(estimate_meal_calories.__globals__.get("CALORIE_TABLE", {}).keys())
+        unknown_items = [item for item in items if item.lower() not in known_items]
         
         result = f"Estimated meal calories: **{total_calories} calories**\n\n"
         result += f"Items: {', '.join(items)}\n\n"
         
         if unknown_items:
             result += f"Note: Some items ({', '.join(unknown_items)}) are not in the database and were counted as 0 calories.\n"
-            result += "Available items: apple, banana, chicken breast, rice, salad\n\n"
+            result += f"Available items: {', '.join(sorted(known_items))}\n\n"
         
         result += "This is an estimate. Actual calories may vary based on portion sizes and preparation methods."
         return result

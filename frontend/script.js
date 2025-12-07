@@ -1,12 +1,14 @@
-// Auto-detect API URL based on current host
+// Basic chat client for the Fitness AI Assistant (no persistent history)
 const API_URL = window.location.origin + "/chat";
 const STORAGE_KEY = "fitness_ai_chat_history";
 
 // Local, in-memory history that mirrors what is persisted and sent to the backend
 let chatHistory = [];
 
-// Initialize - add Enter key support
-document.addEventListener('DOMContentLoaded', function() {
+// Keep an in-memory array so we can re-render if needed
+const chatMessages = [];
+
+window.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("user-input");
     const sendBtn = document.getElementById("send-btn");
 
@@ -103,38 +105,31 @@ function persistMessage(message) {
     }
 }
 
-function formatMessage(text) {
-    // Convert line breaks to <br>
-    let formatted = text.replace(/\n/g, "<br>");
-    
-    // Format numbered lists
-    formatted = formatted.replace(/(\d+\.\s+[^\n]+)/g, "<div style='margin: 4px 0; padding-left: 10px;'>$1</div>");
-    
-    // Format bold text (**text**)
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    
-    // Format code-like text (backticks)
-    formatted = formatted.replace(/`([^`]+)`/g, "<code style='background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;'>$1</code>");
-    
-    return formatted;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble fade-in";
+    bubble.innerHTML = formatMessage(text);
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chatArea.appendChild(row);
+
+    chatMessages.push({ role, content: text });
+    chatArea.scrollTop = chatArea.scrollHeight;
 }
 
 function setLoading(isLoading) {
     const sendBtn = document.getElementById("send-btn");
-    const sendText = document.getElementById("send-text");
-    const spinner = document.getElementById("loading-spinner");
     const input = document.getElementById("user-input");
-    
+    const icon = document.getElementById("send-icon");
+
     if (isLoading) {
         sendBtn.disabled = true;
-        sendText.style.display = "none";
-        spinner.style.display = "inline";
         input.disabled = true;
+        icon.classList.add("spinning");
     } else {
         sendBtn.disabled = false;
-        sendText.style.display = "inline";
-        spinner.style.display = "none";
         input.disabled = false;
+        icon.classList.remove("spinning");
         input.focus();
     }
 }
@@ -142,7 +137,7 @@ function setLoading(isLoading) {
 async function sendMessage() {
     const input = document.getElementById("user-input");
     const text = input.value.trim();
-    
+
     if (!text) return;
     
     // Show the user message immediately but avoid saving it until we have the official history from the backend.
@@ -160,13 +155,13 @@ async function sendMessage() {
         const response = await fetch(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ message: text })
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
 
         // Trust the server's history to stay aligned, then re-render the latest assistant reply.
