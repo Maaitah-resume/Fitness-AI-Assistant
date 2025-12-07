@@ -1,10 +1,13 @@
 // Auto-detect API URL based on current host
 const API_URL = window.location.origin + "/chat";
+const STORAGE_KEY = "fitness_ai_chat_history";
 
 // Initialize - add Enter key support
 document.addEventListener('DOMContentLoaded', function() {
     const input = document.getElementById("user-input");
     const sendBtn = document.getElementById("send-btn");
+
+    loadChatHistory();
     
     input.addEventListener("keypress", function(e) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -17,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
     input.focus();
 });
 
-function addMessage(text, sender, isError = false) {
+function addMessage(text, sender, isError = false, skipSave = false) {
     const chatBox = document.getElementById("chat-box");
     
     // Remove welcome message if it exists
@@ -44,6 +47,48 @@ function addMessage(text, sender, isError = false) {
     
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
+
+    if (!skipSave) {
+        persistMessage({ text, sender, isError });
+    }
+}
+
+function loadChatHistory() {
+    const chatBox = document.getElementById("chat-box");
+    const rawHistory = localStorage.getItem(STORAGE_KEY);
+
+    if (!rawHistory) return;
+
+    try {
+        const history = JSON.parse(rawHistory);
+        if (!Array.isArray(history)) return;
+
+        chatBox.querySelector(".welcome-msg")?.remove();
+
+        history.forEach((entry) => {
+            if (entry?.text && entry?.sender) {
+                addMessage(entry.text, entry.sender, entry.isError, true);
+            }
+        });
+    } catch (error) {
+        console.error("Failed to load chat history:", error);
+        localStorage.removeItem(STORAGE_KEY);
+    }
+}
+
+function persistMessage(message) {
+    try {
+        const rawHistory = localStorage.getItem(STORAGE_KEY);
+        const history = rawHistory ? JSON.parse(rawHistory) : [];
+
+        history.push(message);
+
+        // Keep recent history to avoid unbounded growth
+        const trimmed = history.slice(-100);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch (error) {
+        console.error("Failed to save chat history:", error);
+    }
 }
 
 function formatMessage(text) {
@@ -124,10 +169,4 @@ async function sendMessage() {
     } finally {
         setLoading(false);
     }
-}
-
-function sendQuickMessage(message) {
-    const input = document.getElementById("user-input");
-    input.value = message;
-    sendMessage();
 }
