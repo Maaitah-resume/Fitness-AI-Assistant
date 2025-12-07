@@ -9,8 +9,15 @@
 <body>
     <div class="container">
         <header>
-            <h1>Fitness AI Assistant</h1>
-            <p class="subtitle">Your personal fitness coach powered by AI</p>
+            <div class="title-block">
+                <h1>Fitness AI Assistant</h1>
+                <p class="subtitle">Your personal fitness coach powered by AI</p>
+            </div>
+            <div class="header-actions">
+                <button id="history-toggle" class="ghost-btn" type="button" aria-label="Open chat history" onclick="toggleHistoryDrawer()">
+                    Chat History
+                </button>
+            </div>
         </header>
 
         <div id="chat-box">
@@ -47,31 +54,31 @@
             </div>
         </div>
 
-        <div class="quick-actions">
-            <button class="quick-btn" onclick="sendQuickMessage('bmi 70 175')">BMI</button>
-            <button class="quick-btn" onclick="sendQuickMessage('calories 70 175 30 male medium')">Calories</button>
-            <button class="quick-btn" onclick="sendQuickMessage('meal calories apple chicken breast rice')">Meal</button>
-            <button class="quick-btn" onclick="sendQuickMessage('workout weight loss beginner')">Workout</button>
-            <button class="quick-btn" onclick="sendQuickMessage('duration 3 10 60')">Duration</button>
-            <button class="quick-btn" onclick="sendQuickMessage('bodyfat 70 175 30 male')">Body Fat</button>
-            <button class="quick-btn" onclick="sendQuickMessage('idealweight 175 male')">Ideal Weight</button>
-            <button class="quick-btn" onclick="sendQuickMessage('protein 70')">Protein</button>
-            <button class="quick-btn" onclick="sendQuickMessage('water 70')">Water</button>
-            <button class="quick-btn" onclick="sendQuickMessage('heartrate 30')">Heart Rate</button>
-            <button class="quick-btn" onclick="sendQuickMessage('macros 2000')">Macros</button>
-        </div>
-
         <div class="input-area">
-            <input 
-                type="text" 
-                id="user-input" 
-                placeholder="Ask me anything about fitness..." 
+            <input
+                type="text"
+                id="user-input"
+                placeholder="Ask me anything about fitness..."
                 autocomplete="off"
             >
             <button id="send-btn" onclick="sendMessage()">
                 <span id="send-text">Send</span>
                 <span id="loading-spinner" class="spinner" style="display: none;">...</span>
             </button>
+        </div>
+
+        <div id="history-drawer" class="history-drawer" aria-hidden="true">
+            <div class="history-header">
+                <div>
+                    <h2>Saved chat history</h2>
+                    <p class="history-subtitle">Messages saved locally in your browser</p>
+                </div>
+                <div class="history-actions">
+                    <button class="ghost-btn" type="button" onclick="clearHistory()">Clear</button>
+                    <button class="ghost-btn" type="button" onclick="toggleHistoryDrawer()">Close</button>
+                </div>
+            </div>
+            <div id="history-list" class="history-list"></div>
         </div>
     </div>
 
