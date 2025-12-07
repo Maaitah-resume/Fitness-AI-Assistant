@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 import os
 
 from .chat_logic import generate_response
+from .chat_models import ChatMessage, ChatRequest, ChatResponse
 
 
 app = FastAPI(title="Fitness AI Assistant", version="1.0.0")
@@ -25,14 +25,6 @@ if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
 
-class ChatRequest(BaseModel):
-    message: str
-
-
-class ChatResponse(BaseModel):
-    reply: str
-
-
 @app.post("/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest):
     """
@@ -40,8 +32,9 @@ def chat_endpoint(req: ChatRequest):
     Body: { "message": "your text here" }
     Returns: { "reply": "assistant's answer" }
     """
-    reply = generate_response(req.message)
-    return ChatResponse(reply=reply)
+    # Always keep history optional so existing simple requests continue to work.
+    reply, updated_history = generate_response(req.message, req.history or [])
+    return ChatResponse(reply=reply, history=updated_history)
 
 
 @app.get("/")
