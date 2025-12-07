@@ -3,12 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from .chat_logic import generate_response
 from .chat_models import ChatMessage, ChatRequest, ChatResponse
 
 
 app = FastAPI(title="Fitness AI Assistant", version="1.0.0")
+GOOGLE_GEMINI_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -55,3 +58,4 @@ def health():
     """
     return {"status": "running", "service": "Fitness AI Assistant"}
 
+print("STATIC PATH:", frontend_path)
