@@ -121,15 +121,15 @@ def try_handle_meal_calories_command(user_message: str) -> str | None:
 
     try:
         total_calories = estimate_meal_calories(items)
-        found_items = [item for item in items if item.lower() in ["apple", "banana", "chicken breast", "rice", "salad"]]
-        unknown_items = [item for item in items if item.lower() not in ["apple", "banana", "chicken breast", "rice", "salad"]]
+        known_items = set(estimate_meal_calories.__globals__.get("CALORIE_TABLE", {}).keys())
+        unknown_items = [item for item in items if item.lower() not in known_items]
         
         result = f"Estimated meal calories: **{total_calories} calories**\n\n"
         result += f"Items: {', '.join(items)}\n\n"
         
         if unknown_items:
             result += f"Note: Some items ({', '.join(unknown_items)}) are not in the database and were counted as 0 calories.\n"
-            result += "Available items: apple, banana, chicken breast, rice, salad\n\n"
+            result += f"Available items: {', '.join(sorted(known_items))}\n\n"
         
         result += "This is an estimate. Actual calories may vary based on portion sizes and preparation methods."
         return result
@@ -381,6 +381,19 @@ def try_handle_tool_commands(user_message: str) -> str | None:
     return None
 
 
+def _build_prompt(user_message: str) -> str:
+    """Combine the system prompt with a single user message."""
+
+    return "\n".join(
+        [
+            SYSTEM_PROMPT,
+            "",
+            f"User: {user_message}",
+            "Assistant:",
+        ]
+    )
+
+
 def generate_response(user_message: str) -> str:
     """
     Main function called by the API.
@@ -396,10 +409,9 @@ def generate_response(user_message: str) -> str:
         log_conversation(user_message, tool_reply)
         return tool_reply
 
-    # 2) Normal LLM-based chat with Gemini
-    # Combine system prompt with user message
-    full_prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nAssistant:"
-    
+    # 2) Normal LLM-based chat with Gemini using a simple prompt
+    full_prompt = _build_prompt(user_message)
+
     model = get_client()
     response = model.generate_content(
         full_prompt,
