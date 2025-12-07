@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     input.focus();
 });
 
-function addMessage(text, role, isError = false, skipSave = false) {
+function addMessage(text, sender, isError = false, skipSave = false) {
     const chatBox = document.getElementById("chat-box");
 
     // Remove welcome message if it exists
@@ -84,9 +84,6 @@ function loadChatHistory() {
         chatHistory.forEach((entry) => {
             addMessage(entry.content, entry.role, entry.isError, true);
         });
-
-        // Keep the drawer view in sync with any restored history.
-        renderHistoryDrawer();
     } catch (error) {
         console.error("Failed to load chat history:", error);
         localStorage.removeItem(STORAGE_KEY);
@@ -101,68 +98,9 @@ function persistMessage(message) {
         const trimmed = chatHistory.slice(-100);
         chatHistory = trimmed;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-
-        // Refresh the drawer contents if it is currently visible.
-        renderHistoryDrawer();
     } catch (error) {
         console.error("Failed to save chat history:", error);
     }
-}
-
-// Toggle the side drawer that lets users review previously saved messages.
-function toggleHistoryDrawer() {
-    const drawer = document.getElementById("history-drawer");
-    if (!drawer) return;
-
-    const isOpen = drawer.classList.contains("open");
-    if (isOpen) {
-        drawer.classList.remove("open");
-        drawer.setAttribute("aria-hidden", "true");
-        return;
-    }
-
-    // Render the latest history snapshot right before showing the drawer.
-    renderHistoryDrawer();
-    drawer.classList.add("open");
-    drawer.setAttribute("aria-hidden", "false");
-}
-
-// Render the history entries inside the drawer using the in-memory history array.
-function renderHistoryDrawer() {
-    const list = document.getElementById("history-list");
-    if (!list) return;
-
-    list.innerHTML = "";
-
-    if (!chatHistory.length) {
-        const empty = document.createElement("div");
-        empty.className = "history-empty";
-        empty.textContent = "No saved messages yet. Start chatting to build history.";
-        list.appendChild(empty);
-        return;
-    }
-
-    chatHistory.forEach((entry, idx) => {
-        const item = document.createElement("div");
-        item.className = "history-entry";
-
-        const label = document.createElement("strong");
-        label.textContent = `${idx + 1}. ${entry.role === "assistant" ? "Assistant" : "You"}`;
-
-        const content = document.createElement("div");
-        content.innerHTML = formatMessage(entry.content);
-
-        item.appendChild(label);
-        item.appendChild(content);
-        list.appendChild(item);
-    });
-}
-
-// Clear local history storage and update both the drawer and the in-memory array.
-function clearHistory() {
-    chatHistory = [];
-    localStorage.removeItem(STORAGE_KEY);
-    renderHistoryDrawer();
 }
 
 function formatMessage(text) {
@@ -236,13 +174,11 @@ async function sendMessage() {
             const trimmed = data.history.slice(-100);
             chatHistory = trimmed;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-            renderHistoryDrawer();
         } else {
             // Fallback: append the two most recent messages if history was missing.
             chatHistory.push({ role: "user", content: text });
             chatHistory.push({ role: "assistant", content: data.reply });
             localStorage.setItem(STORAGE_KEY, JSON.stringify(chatHistory.slice(-100)));
-            renderHistoryDrawer();
         }
 
         addMessage(data.reply, "assistant", false, true);
