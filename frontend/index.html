@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gym Club Chatbot - Your Fitness Assistant</title>
+
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +14,8 @@
 <body>
 
 <div class="chat-container">
+
+    <!-- HEADER -->
     <div class="chat-header">
         <div class="chat-header-left">
             <img src="https://i.imgur.com/zznYk5u.png" class="chat-logo" alt="Gym Logo">
@@ -24,37 +27,11 @@
         <button class="chat-close" aria-label="Close chat">×</button>
     </div>
 
-    <div id="chat-box" class="chat-area">
-        <div class="welcome-msg">
-            <div class="welcome-icon">💪</div>
-            <p>Welcome! I'm your Fitness AI Assistant</p>
-            <span class="welcome-subtitle">I can help you with:</span>
-            <ul>
-                <li onclick="quickQuestion('Calculate my BMI')">
-                    <span class="icon">📊</span>
-                    <span>BMI Calculator</span>
-                </li>
-                <li onclick="quickQuestion('How many calories do I burn?')">
-                    <span class="icon">🔥</span>
-                    <span>Calorie Burn Estimator</span>
-                </li>
-                <li onclick="quickQuestion('Calculate meal calories')">
-                    <span class="icon">🍎</span>
-                    <span>Meal Calorie Counter</span>
-                </li>
-                <li onclick="quickQuestion('Create a workout plan')">
-                    <span class="icon">🏋️</span>
-                    <span>Custom Workout Plans</span>
-                </li>
-                <li onclick="quickQuestion('Calculate heart rate zones')">
-                    <span class="icon">❤️</span>
-                    <span>Heart Rate Zones</span>
-                </li>
-            </ul>
-        </div>
-    </div>
+    <!-- CHAT AREA (EMPTY ALWAYS ON LOAD) -->
+    <div id="chat-box" class="chat-area"></div>
 
-    <div class="typing-indicator" id="typing-indicator" style="display: none;">
+    <!-- TYPING INDICATOR -->
+    <div class="typing-indicator" id="typing-indicator" style="display:none;">
         <div class="message ai-msg">
             <div class="message-avatar">🤖</div>
             <div class="typing-dots">
@@ -65,11 +42,12 @@
         </div>
     </div>
 
+    <!-- INPUT BAR -->
     <div class="chat-input-bar">
         <input 
             type="text" 
             id="user-input" 
-            placeholder="Type your message..." 
+            placeholder="Type your message..."
             autocomplete="off"
             onkeypress="handleKeyPress(event)"
         >
@@ -77,6 +55,7 @@
             <span id="send-icon">➤</span>
         </button>
     </div>
+
 </div>
 
 <script src="/static/script.js"></script>

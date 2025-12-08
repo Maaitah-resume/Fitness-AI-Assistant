@@ -1,19 +1,23 @@
-// Initialize chat on page load
-document.addEventListener('DOMContentLoaded', function() {
-    loadPersistedMessages();
-    focusInput();
-});
-
-// Add message to chat with enhanced formatting
-function addMessage(text, role, isError = false, skipSave = false) {
+//-----------------------------------------------------
+// RESET CHAT ON PAGE LOAD
+//-----------------------------------------------------
+window.addEventListener("DOMContentLoaded", () => {
     const chatBox = document.getElementById("chat-box");
 
-    // Remove welcome message if it exists
-    const welcomeMsg = chatBox.querySelector(".welcome-msg");
-    if (welcomeMsg) {
-        welcomeMsg.style.animation = 'fadeOut 0.3s ease';
-        setTimeout(() => welcomeMsg.remove(), 300);
+    if (chatBox) {
+        chatBox.innerHTML = ""; // Clear previous messages
     }
+
+    // Add single clean welcome message
+    addMessage("Hey there! I'm GymAI. How can I help you achieve your fitness goals today?", "assistant");
+});
+
+
+//-----------------------------------------------------
+// ADD MESSAGE TO CHAT
+//-----------------------------------------------------
+function addMessage(text, role, isError = false) {
+    const chatBox = document.getElementById("chat-box");
 
     const row = document.createElement("div");
     row.className = `message ${role === "assistant" ? "ai-msg" : "user-msg"}`;
@@ -30,56 +34,41 @@ function addMessage(text, role, isError = false, skipSave = false) {
     row.appendChild(bubble);
     chatBox.appendChild(row);
 
-    // Smooth scroll to bottom
+    // Auto scroll to bottom
     setTimeout(() => {
         chatBox.scrollTop = chatBox.scrollHeight;
     }, 100);
-
-    if (!skipSave) {
-        persistMessage({ role, content: text, isError });
-    }
 }
 
-// Format message text with basic markdown support
+
+//-----------------------------------------------------
+// MESSAGE FORMATTING
+//-----------------------------------------------------
 function formatMessage(text) {
     if (!text) return '';
-    
-    // Convert line breaks
-    text = text.replace(/\n/g, '<br>');
-    
-    // Bold text
-    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
-    // Inline code
-    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
-    // Links (basic)
-    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    
-    return text;
+
+    return text
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
 }
 
-// Show typing indicator
+
+//-----------------------------------------------------
+// TYPING INDICATOR
+//-----------------------------------------------------
 function showTyping() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) {
-        indicator.style.display = 'block';
-        const chatBox = document.getElementById("chat-box");
-        setTimeout(() => {
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }, 100);
-    }
+    document.getElementById("typing-indicator").style.display = "block";
 }
-
-// Hide typing indicator
 function hideTyping() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) {
-        indicator.style.display = 'none';
-    }
+    document.getElementById("typing-indicator").style.display = "none";
 }
 
-// Send message function
+
+//-----------------------------------------------------
+// SEND MESSAGE
+//-----------------------------------------------------
 async function sendMessage() {
     const input = document.getElementById("user-input");
     const sendBtn = document.getElementById("send-btn");
@@ -87,133 +76,57 @@ async function sendMessage() {
 
     if (!text) return;
 
-    // Disable input while sending
+    // Disable UI while processing
     input.disabled = true;
     sendBtn.disabled = true;
 
-    // Add user message
     addMessage(text, "user");
     input.value = "";
 
-    // Show typing indicator
     showTyping();
 
     try {
-        // Send to backend
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ message: text })
         });
 
         const data = await response.json();
-
-        // Hide typing indicator
         hideTyping();
 
         if (response.ok && data.response) {
             addMessage(data.response, "assistant");
         } else {
-            addMessage(data.error || "Sorry, I couldn't process your request. Please try again.", "assistant", true);
+            addMessage("Sorry, I couldn't process your request.", "assistant", true);
         }
-    } catch (error) {
+    } catch (err) {
         hideTyping();
-        addMessage("Connection error. Please check your internet and try again.", "assistant", true);
-        console.error('Error:', error);
-    } finally {
-        // Re-enable input
-        input.disabled = false;
-        sendBtn.disabled = false;
-        focusInput();
+        addMessage("Connection error. Please try again.", "assistant", true);
     }
+
+    // Re-enable UI
+    input.disabled = false;
+    sendBtn.disabled = false;
+    input.focus();
 }
 
-// Handle Enter key press
+
+//-----------------------------------------------------
+// ENTER KEY HANDLER
+//-----------------------------------------------------
 function handleKeyPress(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         sendMessage();
     }
 }
 
-// Quick question from welcome menu
-function quickQuestion(question) {
-    const input = document.getElementById("user-input");
-    input.value = question;
-    input.focus();
-    sendMessage();
-}
 
-// Focus on input field
+//-----------------------------------------------------
+// FOCUS INPUT FIELD
+//-----------------------------------------------------
 function focusInput() {
     const input = document.getElementById("user-input");
-    if (input) {
-        input.focus();
-    }
+    if (input) input.focus();
 }
-
-// Persist messages to storage (if available)
-function persistMessage(message) {
-    try {
-        const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-        messages.push({
-            ...message,
-            timestamp: new Date().toISOString()
-        });
-        
-        // Keep only last 50 messages
-        if (messages.length > 50) {
-            messages.splice(0, messages.length - 50);
-        }
-        
-        localStorage.setItem('chatHistory', JSON.stringify(messages));
-    } catch (error) {
-        console.warn('Could not persist message:', error);
-    }
-}
-
-// Load persisted messages on page load
-function loadPersistedMessages() {
-    try {
-        const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-        
-        // Only load recent messages (last 10)
-        const recentMessages = messages.slice(-10);
-        
-        if (recentMessages.length > 0) {
-            // Remove welcome message
-            const chatBox = document.getElementById("chat-box");
-            const welcomeMsg = chatBox.querySelector(".welcome-msg");
-            if (welcomeMsg) welcomeMsg.remove();
-            
-            // Add all persisted messages
-            recentMessages.forEach(msg => {
-                addMessage(msg.content, msg.role, msg.isError || false, true);
-            });
-        }
-    } catch (error) {
-        console.warn('Could not load persisted messages:', error);
-    }
-}
-
-// Clear chat history
-function clearChatHistory() {
-    try {
-        localStorage.removeItem('chatHistory');
-        location.reload();
-    } catch (error) {
-        console.warn('Could not clear chat history:', error);
-    }
-}
-
-// Add CSS for fadeOut animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeOut {
-        from { opacity: 1; transform: scale(1); }
-        to { opacity: 0; transform: scale(0.95); }
-    }
-`;
-document.head.appendChild(style);
