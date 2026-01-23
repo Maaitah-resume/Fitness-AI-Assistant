@@ -4,13 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import os
-from backend.user_memory import reset_profile   
 
 from .chat_logic import generate_response
 
 app = FastAPI(title="Fitness AI Assistant")
- 
-# CORS
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,25 +18,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
+
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 class ChatRequest(BaseModel):
-    message: str   # ONLY message, no history
-
-@app.on_event("startup")
-def startup_event():
-    os.makedirs("backend/memory", exist_ok=True)
-    reset_profile()
-
-
+    message: str
 
 @app.post("/chat")
 def chat_endpoint(req: ChatRequest):
-    reply = generate_response(req.message)
-    return {"response": reply}
+    reply, meta = generate_response(req.message)
+
+    response = {
+        "response": reply
+    }
+
+    if meta.get("profile_completed"):
+        response["profile_completed"] = True
+        response["profile"] = meta.get("profile")
+
+    return response
+
+
 
 @app.get("/")
 def root():
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+

@@ -1,49 +1,223 @@
-# Fitness AI Assistant
+🏋️ Fitness AI Assistant
 
-Fitness AI Assistant is a FastAPI-based chatbot with a web frontend for fitness guidance, BMI calculations, and general health tips.
+Fitness AI Assistant is a FastAPI-based conversational system that provides fitness guidance, muscle-gain advice, BMI-related insights, and general health support through a web-based chat interface.
 
-## Quick Start
-1. **Install dependencies** (first time only):
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. **Run the server** (serves backend + frontend together):
-   ```bash
-   python run_server.py
-   ```
-3. **Open the app** in your browser at:
-   - http://localhost:8000 (main UI)
-   - http://localhost:8000/docs (API docs)
-   - http://localhost:8000/health (health check)
+The system combines:
 
-## Troubleshooting "site can't be reached" / connection refused
-- Make sure the server is running: after starting `python run_server.py` you should see `Uvicorn running on http://0.0.0.0:8000` in the terminal.
-- Try the health check from the terminal:
-  ```bash
-  curl http://localhost:8000/health
-  ```
-  A healthy server returns `{ "status": "ok" }`.
-- Use **localhost** or **127.0.0.1** in the browser address bar (avoid `0.0.0.0`).
-- Ensure nothing else is using port **8000**. If it is, stop the other service or change the port in `run_server.py`.
-- Disable VPNs/proxies that block local connections. On corporate networks, allow localhost traffic in your firewall/antivirus if prompted.
-- If you stop the server with **Ctrl+C**, start it again before refreshing the page.
+Rule-aware conversation flow (profile building)
 
-## Project Structure
-- `backend/` – FastAPI app and routes.
-- `frontend/` – Static assets served by the backend.
-- `run_server.py` – Convenience entrypoint for local development.
-- `data/`, `notebooks/` – Supporting datasets and experiments.
+Generative AI responses (Gemini)
 
-## Development workflow
-If you make improvements locally, keep the history clean so others can follow along:
+Persistent user profiles and chat history
 
-1. Create a new branch from `work` for your change.
-2. Make and test your updates (preferably with `python run_server.py` running locally).
-3. Commit the changes with a descriptive message (for example, `git commit -am "Update README quick start"`).
-4. Push your branch and open a pull request so the updates are tracked in the repository.
+A lightweight frontend served directly by the backend
 
-Enjoy exploring the Fitness AI Assistant! 💪
+✨ Key Features
 
-## Additional documentation
-- **HOW_TO_RUN.md** – Detailed setup, backend/ frontend start options, and troubleshooting tips.
-- **START_APP.md** – Minimal quick-start commands for running the server.
+💬 AI Fitness Chatbot
+Natural language interaction for workouts, nutrition, and fitness questions.
+
+👤 User Profile Creation
+Collects age, weight, height, goal, and fitness level to personalize responses.
+
+🧠 Hybrid Intelligence
+
+Structured logic for profile flow
+
+Generative AI for flexible, open-ended guidance
+
+🗂 Conversation History Storage
+All user and assistant messages are stored in SQLite for analysis and replay.
+
+📊 Analysis Notebook
+Jupyter notebooks for inspecting user profiles and chat history.
+
+🌐 Single-Server Deployment
+Backend and frontend are served together via FastAPI.
+
+🧱 Tech Stack
+
+Backend: Python, FastAPI
+
+Frontend: HTML, CSS, JavaScript
+
+Database: SQLite
+
+AI Model: Google Gemini API
+
+Analysis: Pandas, Matplotlib, Seaborn, Jupyter
+
+🚀 Quick Start
+1️⃣ Install dependencies (first time only)
+pip install -r requirements.txt
+
+2️⃣ Run the server
+python run_server.py
+
+3️⃣ Open the app in your browser
+
+Main UI: http://localhost:8000
+
+API Docs: http://localhost:8000/docs
+
+Health Check: http://localhost:8000/health
+
+🩺 Health Check
+
+You can verify the server is running using:
+
+curl http://localhost:8000/health
+
+
+Expected response:
+
+{ "status": "ok" }
+
+🗂 Project Structure
+FITNESS-AI-ASSISTANT/
+├─ backend/
+│  ├─ agents/            # Modular fitness tools
+│  ├─ prompts/           # System + safety prompts
+│  ├─ app.py             # FastAPI entrypoint
+│  ├─ chat_logic.py      # Core conversation logic
+│  ├─ db.py              # Database access layer
+│  ├─ init_db.py         # Database initialization
+│  └─ schema.sql         # SQLite schema
+│
+├─ frontend/
+│  ├─ index.html
+│  ├─ script.js
+│  └─ style.css
+│
+├─ notebooks/
+│  └─ analysis.ipynb     # Profile & chat analysis
+│
+├─ run_server.py
+├─ requirements.txt
+├─ README.md
+├─ HOW_TO_RUN.md
+├─ START_APP.md
+└─ PROJECT_STATUS.md
+
+🗃 Database Design (Overview)
+
+The system uses SQLite with two core tables:
+
+users
+
+Stores user profile information:
+
+username
+
+age
+
+gender
+
+goal
+
+fitness level
+
+messages
+
+Stores conversation history:
+
+user / assistant role
+
+message text
+
+timestamp
+
+user reference (foreign key)
+
+This design enables:
+
+Persistent chat history
+
+Post-conversation analytics
+
+Dashboard-style visualization
+
+📊 Analysis & Visualization
+
+The notebooks/analysis.ipynb notebook allows you to:
+
+Load user profiles from SQLite
+
+Inspect conversation history
+
+Create bar charts and radar plots of user attributes
+
+Analyze interaction patterns between user and assistant
+
+This is useful for:
+
+Debugging AI behavior
+
+Academic reporting
+
+UX evaluation
+
+🔐 Environment Variables
+
+Create a .env file (not committed to GitHub):
+
+GEMINI_API_KEY=your_api_key_here
+
+
+⚠️ .env and *.db files are excluded via .gitignore.
+
+🛠 Troubleshooting
+Site can’t be reached / connection refused
+
+Ensure the server is running (python run_server.py)
+
+Use localhost or 127.0.0.1, not 0.0.0.0
+
+Make sure port 8000 is free
+
+Disable VPNs or proxies blocking local traffic
+
+Gemini API errors
+
+Check API key validity
+
+Verify quota limits
+
+The app gracefully falls back with a user-friendly message
+
+🔄 Development Workflow
+
+To keep the repository clean:
+
+Create a new branch from work
+
+Make and test your changes locally
+
+Commit with a clear message:
+
+git commit -am "Improve profile flow handling"
+
+
+Push and open a pull request
+
+📌 Project Status
+
+This project is:
+
+✔ Fully functional
+
+✔ Modular and extensible
+
+✔ Suitable for academic submission or portfolio use
+
+Future improvements may include:
+
+User authentication
+
+Multi-user sessions
+
+Advanced analytics dashboard
+
+💪 Final Note
+
+Fitness AI Assistant demonstrates how structured logic and generative AI can work together to create reliable, user-friendly intelligent systems.

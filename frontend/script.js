@@ -9,7 +9,10 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     // Add single clean welcome message
-    addMessage("Hey there! I'm GymAI. How can I help you achieve your fitness goals today?", "assistant");
+    addMessage(
+        "Hey there! I'm GymAI. How can I help you achieve your fitness goals today?",
+        "assistant"
+    );
 });
 
 
@@ -34,7 +37,6 @@ function addMessage(text, role, isError = false) {
     row.appendChild(bubble);
     chatBox.appendChild(row);
 
-    // Auto scroll to bottom
     setTimeout(() => {
         chatBox.scrollTop = chatBox.scrollHeight;
     }, 100);
@@ -45,12 +47,12 @@ function addMessage(text, role, isError = false) {
 // MESSAGE FORMATTING
 //-----------------------------------------------------
 function formatMessage(text) {
-    if (!text) return '';
+    if (!text) return "";
 
     return text
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n/g, "<br>")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
 }
 
@@ -76,7 +78,6 @@ async function sendMessage() {
 
     if (!text) return;
 
-    // Disable UI while processing
     input.disabled = true;
     sendBtn.disabled = true;
 
@@ -105,7 +106,6 @@ async function sendMessage() {
         addMessage("Connection error. Please try again.", "assistant", true);
     }
 
-    // Re-enable UI
     input.disabled = false;
     sendBtn.disabled = false;
     input.focus();
@@ -124,7 +124,7 @@ function handleKeyPress(event) {
 
 
 //-----------------------------------------------------
-// FOCUS INPUT FIELD
+// FOCUS INPUT
 //-----------------------------------------------------
 function focusInput() {
     const input = document.getElementById("user-input");
