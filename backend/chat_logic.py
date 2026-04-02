@@ -1,285 +1,270 @@
-from backend.db import (
-    get_or_create_user,
+from openai import OpenAI
+import os
+
+from db import (
     save_message,
     load_chat_history,
     get_user_profile,
-    update_user_profile
+    update_user_profile,
+    create_chat,
 )
+from config import OPENAI_API_KEY, OPENAI_MODEL
 
-from backend.config import GEMINI_MODEL_NAME
-import google.generativeai as genai
+# ── OpenAI client ─────────────────────────────────────────────────────────────
+_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ── RAG ───────────────────────────────────────────────────────────────────────
+try:
+    from rag.chain import get_rag_chain
+    rag_chain = get_rag_chain()
+    print("[RAG] Chain loaded successfully.")
+except Exception as _rag_err:
+    print(f"[RAG] Could not load chain: {_rag_err}. Continuing without RAG.")
+    rag_chain = None
+# ─────────────────────────────────────────────────────────────────────────────
 
 
-
-def get_client():
+def _get_rag_context(user_message: str) -> str:
+    """Run RAG retrieval and return context text, or '' on any failure."""
+    if rag_chain is None:
+        return ""
     try:
-        return genai.GenerativeModel(GEMINI_MODEL_NAME)
+        result = rag_chain.invoke({"query": user_message})
+        return result.get("result", "") if isinstance(result, dict) else str(result)
     except Exception as e:
-        print("Client init error:", e)
-        return None
+        print(f"[RAG] Retrieval error: {e}")
+        return ""
 
 
-def ask_gemini(user_message, profile, history):
-    client = get_client()
-    if client is None:
-        return "I'm having trouble reaching Gemini right now — please try again later."
+def ask_openai(user_message: str, profile: dict, history: list) -> str:
+    context = _get_rag_context(user_message)
 
-    conversation = ""
-    for msg in history:
-        conversation += f"{msg['role'].upper()}: {msg['message']}\n"
+    system_prompt = """
+You are GymAI — a friendly, knowledgeable fitness assistant with the ability to
+read and answer questions about documents the user has uploaded.
 
-    SYSTEM_PROMPT = """
-        You are GymAI — a friendly and knowledgeable fitness assistant.
+==========================================================
+1) DOCUMENT / PDF READING
+==========================================================
+- The user may upload fitness-related PDFs (programs, nutrition guides, research, etc.).
+- When a CONTEXT FROM UPLOADED DOCUMENT section appears in the conversation, you
+    MUST use that content to answer the user's question directly and specifically.
+- Quote or reference the document where helpful (e.g. "According to your document…").
+- If the context covers the question, answer from it — do NOT say you cannot read files.
+- If the context is empty or does not cover the question, answer from your general
+    fitness knowledge and let the user know the document did not contain that info.
+- You can use the document context in combination with your general knowledge to answer questions, but always prioritize the document if it contains relevant information. If the user refers to a previous chat or uploaded document, try to use that document as context and ask a clarifying question if it's ambiguous which document they mean.
+==========================================================
+2) GENERAL FITNESS QUESTIONS (NO PROFILE NEEDED)
+==========================================================
+- Answer immediately for questions about workouts, calories, BMI, reps, form,
+    diets, supplements, recovery, etc.
+- Keep answers concise unless more detail is requested.
+- Never force a profile unless the user explicitly wants personalisation.
 
-        Your behavior must adapt based on the USER'S INTENT:
+==========================================================
+3) PERSONALISED PLANS (PROFILE MODE)
+==========================================================
+Only enter PROFILE MODE when the user says something like:
+    "build a plan for me", "create a profile", "tailor it to me",
+    "make a custom plan", "I want a personalized program"
 
-        ==========================================================
-        1) WHEN THE USER WANTS GENERAL ANSWERS (NO PROFILE MODE)
-        ==========================================================
-        - If the user asks a simple question (e.g., workout advice, calories, BMI, reps, form tips, diets), 
-        answer immediately WITHOUT asking for profile fields.
-        - Keep responses short unless the user asks for more detail.
-        - Provide helpful follow-ups naturally (e.g., “Would you like a beginner or advanced version?”).
-        - Never force a fitness profile unless the user explicitly shows interest.
+Collect ONE field at a time: age, weight, height, goal, fitness level.
+When all fields are collected, summarise and ask: workout plan, nutrition plan, or both?
 
-        Triggers for NO-PROFILE mode:
-        - “give me a plan”
-        - “workout for fat loss”
-        - “how many calories”
-        - “what is BMI”
-        - “exercise for chest”
-        - “meal plan”
-        - “form tips”
-        - “diet advice”
-        - Any general fitness question
+==========================================================
+4) USING STORED PROFILE DATA
+==========================================================
+- Tailor every answer using the stored profile when available.
+- Provide structured plans: Workout | Nutrition | Tips.
+- Keep advice safe and realistic.
 
-        ==========================================================
-        2) WHEN THE USER WANTS A PERSONALIZED PLAN (PROFILE MODE)
-        ==========================================================
-        Only enter PROFILE MODE if the user says something like:
-        - “build a plan for me”
-        - “create a profile”
-        - “tailor it to me”
-        - “make a custom plan”
-        - “I want a personalized program”
+==========================================================
+5) GENERAL BEHAVIOUR
+==========================================================
+- Be supportive, friendly, and concise.
+- Adapt your tone to match the user.
+- Never tell the user you "cannot read files" — you can, via the document context provided.
+"""
 
-        When entering profile mode, ask:
-        “Would you like me to build a personal fitness profile for you so I can tailor everything?”
+    # Build the messages list
+    messages = [{"role": "system", "content": system_prompt}]
 
-        If they say YES:
-        Collect the following fields ONE AT A TIME:
-        - age
-        - weight
-        - height
-        - goal (fat loss, muscle gain, endurance)
-        - fitness level (beginner / intermediate / advanced)
+    # ── List previously uploaded PDFs so the model can reference past uploads ──
+    try:
+        data_dir = os.path.join(os.path.dirname(__file__), "data")
+        uploaded = []
+        if os.path.isdir(data_dir):
+            for fn in sorted(os.listdir(data_dir)):
+                if fn.lower().endswith(".pdf"):
+                    uploaded.append(fn)
+        if uploaded:
+            uploads_text = "Previously uploaded documents (indexed):\n" + "\n".join(f"- {p}" for p in uploaded)
+            uploads_text += "\n\nThese documents have been indexed and may be used as context for user questions. If multiple documents are relevant, ask the user to clarify which one to use."
+            messages.append({"role": "system", "content": uploads_text})
+    except Exception:
+        pass
 
-        Rules:
-        1. Ask ONLY ONE question at a time.
-        2. After each answer, confirm and ask for the next missing field.
-        3. If user gives multiple fields in one message, accept them.
-        4. If something is unclear, ask politely for clarification.
-        5. When ALL fields are collected:
-        - Summarize the full profile.
-        - Ask: “Would you like a personalized workout plan, nutrition plan, or both?”
+    # ── Inject document context prominently so the model can't miss it ────────
+    if context and context.strip():
+        messages.append({
+            "role": "system",
+            "content": (
+                "CONTEXT FROM UPLOADED DOCUMENT — use this to answer the user's question:\n\n"
+                + context.strip()
+            ),
+        })
 
-        ==========================================================
-        3) USING STORED PROFILE DATA
-        ==========================================================
-        When the user asks for advice *after* the profile is complete:
-        - Always tailor the answer using their stored age, weight, height, goal, and level.
-        - Keep answers short unless the user specifically requests more detail.
-        - Provide structured plans (Workout | Nutrition | Tips).
-        - Avoid extreme advice; keep everything safe and realistic.
+    # ── Inject user profile ───────────────────────────────────────────────────
+    if profile:
+        messages.append({
+            "role": "system",
+            "content": f"USER FITNESS PROFILE:\n{profile}",
+        })
 
-        ==========================================================
-        4) GENERAL BEHAVIOR
-        ==========================================================
-        - Be supportive, friendly, and concise.
-        - Adapt your tone to match the user.
-        - If unclear, ask a gentle clarifying question.
-        - If Gemini fails, respond: “I’m having trouble reaching Gemini right now — please try again later.”
-        """
+    # ── Conversation history ──────────────────────────────────────────────────
+    for m in history:
+        role = "assistant" if m["role"] == "assistant" else "user"
+        messages.append({"role": role, "content": m["message"]})
 
-
-    conversation = ""
-    for msg in history:
-        conversation += f"{msg['role'].upper()}: {msg['message']}\n"
-
-    prompt = f"""
-    SYSTEM:
-    {SYSTEM_PROMPT}
-
-    CONVERSATION HISTORY:
-    {conversation}
-
-    USER PROFILE:
-    {profile}
-
-    USER MESSAGE:
-    {user_message}
-
-    Respond naturally.
-    """
+    # ── Current message ───────────────────────────────────────────────────────
+    messages.append({"role": "user", "content": user_message})
 
     try:
-        response = client.generate_content(prompt)
-        return response.text if hasattr(response, "text") else str(response)
+        response = _client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=messages,
+        )
+        return response.choices[0].message.content
     except Exception as e:
-        print("Gemini error:", e)
-        return "I'm having trouble reaching Gemini right now — please try again later."
-def generate_response(user_message: str):
-    """
-    Main brain of the chatbot.
-    Returns:
-        reply_text (str),
-        meta (dict) → used by frontend (dashboard, state, etc.)
-    """
+        print("OpenAI error:", e)
+        return "I'm having trouble reaching the AI right now — please try again later."
 
+
+def generate_response(user_message: str, user_id: int, chat_id: int = None):
+    """
+    Main chatbot entry point.
+
+    Parameters
+    ----------
+    user_message : str
+    user_id      : int   — real DB user ID (resolved from email by the router)
+    chat_id      : int | None
+
+    Returns
+    -------
+    reply  : str
+    meta   : dict  — forwarded to the frontend
+    """
     meta = {}
 
     try:
-    
-        user_id = get_or_create_user(username="default_user")
-        save_message(user_id, "user", user_message)
+        # ── Chat session ──────────────────────────────────────────────────────
+        if not chat_id:
+            chat_id = create_chat(user_id, title=user_message[:50])
+        meta["chat_id"] = chat_id
 
-        history = load_chat_history(user_id)
-        profile = get_user_profile(user_id) or {}
+        save_message(user_id, "user", user_message, chat_id=chat_id)
+
+        history        = load_chat_history(user_id, chat_id=chat_id)
+        profile        = get_user_profile(user_id) or {}
         profile_active = profile.get("profile_active", 0)
 
         msg = user_message.lower().strip()
 
-       
+        # ── Exit profile mode ─────────────────────────────────────────────────
         if any(k in msg for k in [
-            "exit profile",
-            "stop profile",
-            "disable profile",
-            "no profile",
-            "general mode"
+            "exit profile", "stop profile", "disable profile",
+            "no profile", "general mode",
         ]):
             update_user_profile(user_id, profile_active=0)
-
             reply = (
-                "Understood ✅ Profile mode is now paused.\n\n"
-                "I’ll answer in general fitness mode. "
-                "What would you like help with?"
+                "Understood. Profile mode is now paused.\n\n"
+                "I'll answer in general fitness mode. What would you like help with?"
             )
-
-            save_message(user_id, "assistant", reply)
+            save_message(user_id, "assistant", reply, chat_id=chat_id)
             return reply, meta
 
-
-        if msg in [
-            "create profile",
-            "start profile",
-            "yes",
-            "yes please",
-            "sure",
-            "ok"
-        ] and not profile_active:
+        # ── Enter profile mode ────────────────────────────────────────────────
+        if msg in ["create profile", "start profile", "yes",
+                   "yes please", "sure", "ok"] and not profile_active:
             update_user_profile(user_id, profile_active=1)
-
             reply = (
-                "Great 👍 Let’s build your fitness profile.\n\n"
+                "Great! Let's build your fitness profile.\n\n"
                 "First question: what is your age?"
             )
-
-            save_message(user_id, "assistant", reply)
+            save_message(user_id, "assistant", reply, chat_id=chat_id)
             return reply, meta
 
-        
+        # ── Collect profile fields ────────────────────────────────────────────
         if profile_active:
             updated = {}
 
             if msg.isdigit() and 10 < int(msg) < 100:
                 updated["age"] = int(msg)
-
             if "male" in msg:
                 updated["gender"] = "male"
             elif "female" in msg:
                 updated["gender"] = "female"
-
             if "muscle" in msg:
                 updated["goal"] = "muscle_gain"
             elif "fat" in msg:
                 updated["goal"] = "fat_loss"
             elif "endurance" in msg:
                 updated["goal"] = "endurance"
-
             if any(lvl in msg for lvl in ["beginner", "intermediate", "advanced"]):
                 updated["level"] = (
-                    "beginner" if "beginner" in msg else
+                    "beginner"     if "beginner"     in msg else
                     "intermediate" if "intermediate" in msg else
                     "advanced"
                 )
 
             if updated:
                 update_user_profile(user_id, **updated)
-                profile = get_user_profile(user_id)
-
+                profile  = get_user_profile(user_id)
                 required = ["age", "gender", "goal", "level"]
-                missing = [f for f in required if not profile.get(f)]
+                missing  = [f for f in required if not profile.get(f)]
 
                 if missing:
-                    reply = f"Saved 👍 Still need: {', '.join(missing)}."
+                    reply = f"Saved! Still need: {', '.join(missing)}."
                 else:
-                    update_user_profile(user_id, profile_active=1)
-
                     reply = (
-                        "Fantastic! 🎉 Your fitness profile is complete.\n\n"
+                        "Fantastic! Your fitness profile is complete.\n\n"
                         "Would you like a personalized workout plan, "
                         "nutrition plan, or both?"
                     )
-
                     meta["profile_completed"] = True
-                    meta["profile"] = {
-                        "age": profile.get("age"),
-                        "gender": profile.get("gender"),
-                        "goal": profile.get("goal"),
-                        "level": profile.get("level"),
-                    }
+                    meta["profile"] = {k: profile.get(k) for k in required}
 
-                save_message(user_id, "assistant", reply)
+                save_message(user_id, "assistant", reply, chat_id=chat_id)
                 return reply, meta
 
             reply = (
-                "Got it 👍 Just to continue building your profile, "
+                "Got it. Just to continue building your profile, "
                 "could you answer the last question I asked?"
             )
-            save_message(user_id, "assistant", reply)
+            save_message(user_id, "assistant", reply, chat_id=chat_id)
             return reply, meta
 
-
+        # ── OpenAI + RAG ──────────────────────────────────────────────────────
         try:
-            reply = ask_gemini(user_message, profile, history)
+            reply = ask_openai(user_message, profile, history)
         except Exception as e:
-            print("Gemini error:", e)
+            print("OpenAI error:", e)
+            reply = (
+                "I'm temporarily offline for advanced reasoning, "
+                "but I can still help with general fitness guidance.\n\n"
+                "What would you like to know?"
+            )
 
-            if profile.get("goal") == "muscle_gain":
-                reply = (
-                    "Let’s keep things moving 💪\n\n"
-                    "For muscle gain, focus on:\n"
-                    "• Progressive overload\n"
-                    "• 7–9 hours sleep\n"
-                    "• Protein at each meal\n\n"
-                    "Ask me about training, nutrition, or recovery."
-                )
-            else:
-                reply = (
-                    "I’m temporarily offline for advanced reasoning, "
-                    "but I can still help with general fitness guidance.\n\n"
-                    "What would you like to know?"
-                )
-
-        save_message(user_id, "assistant", reply)
-
+        save_message(user_id, "assistant", reply, chat_id=chat_id)
         return reply, meta
 
     except Exception as e:
         print("generate_response error:", e)
-
-        reply = (
-            "I ran into a small issue on my side 😅\n"
-            "Nothing was lost. Please try again."
+        return (
+            "I ran into a small issue on my side.\nNothing was lost. Please try again.",
+            meta,
         )
-        return reply, meta
+    
+    

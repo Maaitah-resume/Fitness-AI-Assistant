@@ -1,13 +1,10 @@
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
-GOOGLE_GEMINI_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
+DB_PATH = os.path.join(os.path.dirname(__file__), "fitness.db")
 
-GEMINI_MODEL_NAME = "gemini-flash-latest"
+OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL    = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-
-genai.configure(api_key=GOOGLE_GEMINI_API_KEY)
