@@ -11,6 +11,11 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.venv/
+
+# Java / Maven (per-service .gitignore also covers these)
+target/
+*.class
 
 # IDE
 .vscode/

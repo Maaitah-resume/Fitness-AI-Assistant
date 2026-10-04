@@ -17,32 +17,63 @@ def _read_clob(value):
     return str(value) if value is not None else ""
 
 
-# ── User management ───────────────────────────────────────────────────────────
+# ── Schema migration ─────────────────────────────────────────────────────────
 
-def register_user(username: str, password: str, email: str = None, name: str = None):
+def ensure_schema():
     """
-    Insert a brand-new user.  Caller is responsible for hashing the password
-    before passing it here.
+    Apply any additive, non-destructive schema changes to an existing DB file
+    (new installs get everything via schema.sql already). Safe to call on
+    every startup.
     """
     conn = get_db()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (username, password, email, name) VALUES (?, ?, ?, ?)",
-        (username, password, email, name),
-    )
-    conn.commit()
+    cur.execute("PRAGMA table_info(users)")
+    columns = [row["name"] for row in cur.fetchall()]
+    if "role" not in columns:
+        cur.execute(
+            "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
+        )
+        conn.commit()
     conn.close()
+
+
+# ── User management ───────────────────────────────────────────────────────────
+
+class UserExistsError(Exception):
+    """Raised when registering a username/email that's already taken."""
+
+
+def create_user(username: str, password_hash: str, email: str, name: str = None) -> int:
+    """
+    Insert a brand-new user with role='user'. `password_hash` must already be
+    a bcrypt hash — hashing happens in the auth router, not here.
+    Raises UserExistsError if the username or email is already taken.
+    """
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO users (username, password, email, name, role) "
+            "VALUES (?, ?, ?, ?, 'user')",
+            (username, password_hash, email, name),
+        )
+        conn.commit()
+        return cur.lastrowid
+    except sqlite3.IntegrityError:
+        raise UserExistsError(f"Username or email already in use.")
+    finally:
+        conn.close()
 
 
 def get_user_by_username(username: str) -> dict | None:
     """
-    Return a user row as a dict (id, username, email, password) or None.
+    Return a user row as a dict (id, username, email, password, role) or None.
     Used by the login endpoint to verify credentials.
     """
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, username, email, password FROM users WHERE username = ?",
+        "SELECT id, username, email, password, role FROM users WHERE username = ?",
         (username,),
     )
     row = cur.fetchone()
@@ -55,69 +86,76 @@ def get_user_by_username(username: str) -> dict | None:
         "username": row["username"],
         "email": row["email"],
         "password": row["password"],
+        "role": row["role"],
     }
 
 
-def get_or_create_user(username: str, password: str = None, email: str = None) -> int:
-    """
-    Look up a user by username; create them if they don't exist.
-    Used by the registration flow.  Returns user_id.
-    """
+def get_user_by_id(user_id: int) -> dict | None:
+    """Return a user (id, username, email, name, role) without the password hash."""
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute("SELECT id FROM users WHERE username = ?", (username,))
-    row = cur.fetchone()
-
-    if row:
-        conn.close()
-        return row["id"]
-
     cur.execute(
-        "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
-        (username, password, email),
+        "SELECT id, username, email, name, role FROM users WHERE id = ?",
+        (user_id,),
     )
-    conn.commit()
-
-    cur.execute("SELECT id FROM users WHERE username = ?", (username,))
     row = cur.fetchone()
     conn.close()
 
     if not row:
-        raise RuntimeError(f"Failed to create user '{username}'.")
-    return row["id"]
+        return None
+    return {
+        "id": row["id"],
+        "username": row["username"],
+        "email": row["email"],
+        "name": row["name"],
+        "role": row["role"],
+    }
 
 
-def get_or_create_user_by_email(email: str) -> int:
-    """
-    Look up a user by email; create a minimal record if they don't exist.
-    Used by every chat route so the frontend only needs to pass an email.
-    Returns user_id.
-    """
+def list_users() -> list[dict]:
+    """Return every user (no password hashes) for the admin panel."""
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute("SELECT id FROM users WHERE email = ?", (email,))
-    row = cur.fetchone()
-
-    if row:
-        conn.close()
-        return row["id"]
-
-    # Auto-create: username defaults to the email address
     cur.execute(
-        "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
-        (email, email, ""),
+        "SELECT id, username, email, name, role, created_at FROM users "
+        "ORDER BY created_at DESC"
     )
-    conn.commit()
+    rows = cur.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r["id"],
+            "username": r["username"],
+            "email": r["email"],
+            "name": r["name"],
+            "role": r["role"],
+            "created_at": str(r["created_at"]) if r["created_at"] else None,
+        }
+        for r in rows
+    ]
 
-    cur.execute("SELECT id FROM users WHERE email = ?", (email,))
-    row = cur.fetchone()
+
+def update_user_role(user_id: int, role: str) -> None:
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+    conn.commit()
     conn.close()
 
-    if not row:
-        raise RuntimeError(f"Failed to create user for email '{email}'.")
-    return row["id"]
+
+def delete_user(user_id: int) -> None:
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM chat_history WHERE user_id = ?", (user_id,)
+    )
+    cur.execute(
+        "DELETE FROM recent_chats WHERE user_id = ?", (user_id,)
+    )
+    cur.execute("DELETE FROM userInfo WHERE user_id = ?", (user_id,))
+    cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
 
 
 # ── User fitness profile ──────────────────────────────────────────────────────

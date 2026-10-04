@@ -37,13 +37,13 @@ Backend and frontend are served together via FastAPI.
 
 🧱 Tech Stack
 
-Backend: Python, FastAPI
+Backend: Python, FastAPI, JWT auth (python-jose + bcrypt)
 
-Frontend: HTML, CSS, JavaScript
+Frontend: React + Vite
 
 Database: SQLite
 
-AI Model: Google Gemini API
+AI Model: OpenAI (chat completions + embeddings), hybrid RAG via Qdrant (dense + TF-IDF sparse, RRF fusion)
 
 Analysis: Pandas, Matplotlib, Seaborn, Jupyter
 

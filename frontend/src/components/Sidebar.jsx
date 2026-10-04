@@ -1,22 +1,26 @@
 import React from 'react';
-import { Plus, Trash2, LayoutDashboard } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, LayoutDashboard, Shield, LogOut } from 'lucide-react';
+import { apiFetch, isAdmin, logout } from '../api';
 
 function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
-    const user_email = localStorage.getItem('user_email') || 'default_user@example.com';
+    const navigate = useNavigate();
 
     const handleDeleteChat = async (e, chatId) => {
         e.stopPropagation();
         try {
-            const resp = await fetch(`/api/v1/chats/${chatId}/${encodeURIComponent(user_email)}`, {
-                method: 'DELETE'
-            });
-            const result = await resp.json();
+            const result = await apiFetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' });
             if (result.status === 'success') {
                 window.location.reload();
             }
         } catch (error) {
             console.error('Delete error:', error);
         }
+    };
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
     };
     return (
         <aside className="sidebar glass">
@@ -57,6 +61,16 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
                     <LayoutDashboard size={18} />
                     <span>Dashboard</span>
                 </a>
+                {isAdmin() && (
+                    <a href="/admin" className="footer-link">
+                        <Shield size={18} />
+                        <span>Admin Panel</span>
+                    </a>
+                )}
+                <button type="button" className="footer-link logout-btn" onClick={handleLogout}>
+                    <LogOut size={18} />
+                    <span>Log Out</span>
+                </button>
             </div>
 
             <style jsx>{`
@@ -167,6 +181,9 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
         .sidebar-footer {
           padding-top: 1rem;
           border-top: 1px solid var(--glass-border);
+          display: flex;
+          flex-direction: column;
+          gap: 0.85rem;
         }
         .footer-link {
           display: flex;
@@ -176,6 +193,13 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
           text-decoration: none;
           font-weight: 500;
           transition: 0.3s;
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: 1rem;
+          font-family: inherit;
+          cursor: pointer;
+          text-align: left;
         }
         .footer-link:hover {
           color: var(--text-white);

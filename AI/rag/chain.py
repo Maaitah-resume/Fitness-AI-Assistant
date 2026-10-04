@@ -80,7 +80,7 @@ def get_rag_chain() -> RetrievalQA:
     """
     if is_collection_ready():
         retriever = HybridRRFRetriever(k=4)
-        print("[RAG] HybridRRFRetriever ready (sparse BM25 + dense MiniLM → RRF).")
+        print("[RAG] HybridRRFRetriever ready (sparse BM25 + dense MiniLM -> RRF).")
     else:
         retriever = _EmptyRetriever()
         print("[RAG] Empty retriever — no PDF indexed yet.")

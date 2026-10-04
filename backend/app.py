@@ -6,24 +6,39 @@ import os
 import sys
 import uvicorn
 
-# ── Make sure the backend directory is on the path ───────────────────────────
+# ── Make sure backend/ and the sibling AI/ dir are both importable ───────────
+# Routers import AI modules directly (chat_logic, rag.*) as top-level names,
+# and AI/chat_logic.py imports backend's db/config the same way — so both
+# directories need to be on sys.path.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+AI_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "AI"))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
+if AI_DIR not in sys.path:
+    sys.path.append(AI_DIR)
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 from routers.auth import router as auth_router
 from routers.chats import router as chats_router
 from routers.users import router as users_router
 from routers.upload import router as upload_router
+from db import ensure_schema
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Fitness AI Assistant")
 
+
+@app.on_event("startup")
+async def run_migrations():
+    ensure_schema()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # No cookies are used (auth is a Bearer JWT), so credentials aren't needed
+    # and we can keep a plain wildcard origin instead of the
+    # allow_origins=["*"] + allow_credentials=True combination browsers reject.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -33,6 +48,11 @@ app.include_router(auth_router)
 app.include_router(chats_router)
 app.include_router(users_router)
 app.include_router(upload_router)
+
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
 
 # ── Frontend static files (only if built) ────────────────────────────────────
 FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend", "dist")

@@ -1,9 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, User, Dumbbell, Utensils } from 'lucide-react';
+import { MessageSquare, User, Dumbbell, Utensils, Shield, LogOut } from 'lucide-react';
+import { getUser, isAdmin, logout } from '../api';
 
 function Dashboard() {
     const navigate = useNavigate();
+    const { username } = getUser();
 
     const cards = [
         {
@@ -33,13 +35,28 @@ function Dashboard() {
             icon: <Utensils size={32} />,
             path: '/nutrition',
             color: '#f59e0b'
-        }
+        },
+        ...(isAdmin() ? [{
+            title: 'Admin Panel',
+            desc: 'Manage registered users and roles.',
+            icon: <Shield size={32} />,
+            path: '/admin',
+            color: '#eab308'
+        }] : [])
     ];
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
+    };
 
     return (
         <div className="dashboard-container">
             <header className="dashboard-header">
-                <h1>Welcome Back, Athlete</h1>
+                <button className="logout-btn" onClick={handleLogout}>
+                    <LogOut size={16} /> Log Out
+                </button>
+                <h1>Welcome Back{username ? `, ${username}` : ''}</h1>
                 <p>Your fitness journey is 85% complete today.</p>
             </header>
 
@@ -70,7 +87,24 @@ function Dashboard() {
         .dashboard-header {
           margin-bottom: 4rem;
           text-align: center;
+          position: relative;
         }
+        .logout-btn {
+          position: absolute;
+          top: 0;
+          right: 0;
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid var(--glass-border);
+          color: var(--text-muted);
+          border-radius: 100px;
+          padding: 0.5rem 1rem;
+          font-size: 0.85rem;
+          cursor: pointer;
+        }
+        .logout-btn:hover { color: var(--text-white); background: rgba(255,255,255,0.12); }
         .dashboard-header h1 {
           font-size: 3rem;
           font-weight: 800;

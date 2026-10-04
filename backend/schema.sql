@@ -11,6 +11,7 @@ CREATE TABLE users (
     email      TEXT UNIQUE,
     name       TEXT,
     password   TEXT NOT NULL,
+    role       TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

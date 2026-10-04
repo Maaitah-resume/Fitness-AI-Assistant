@@ -12,9 +12,9 @@ load_dotenv()
 
 router = APIRouter(prefix="/api/v1", tags=["upload"])
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UPLOAD_DIR = os.path.join(BASE_DIR, "data")
-FAISS_INDEX_PATH = os.path.join(BASE_DIR, "faiss_index")
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AI_DIR = os.path.normpath(os.path.join(BACKEND_DIR, "..", "AI"))
+UPLOAD_DIR = os.path.join(AI_DIR, "data")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 

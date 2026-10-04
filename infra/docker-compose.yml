@@ -1,0 +1,171 @@
+name: fitness-ai
+
+services:
+  # ── Infra ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fitnessai
+      POSTGRES_PASSWORD: fitnessai
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitnessai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/fitnessai123
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: fitnessai
+      MINIO_ROOT_PASSWORD: fitnessai123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # ── Services ─────────────────────────────────────────────────────────────
+  api-gateway:
+    build: ../backend/services/api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_HOST: redis
+      USER_SERVICE_HOST: user-service
+      PROFILE_SERVICE_HOST: profile-service
+      CHAT_SERVICE_HOST: chat-service
+      FILE_SERVICE_HOST: file-service
+      CHARTS_SERVICE_HOST: charts-service
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  user-service:
+    build: ../backend/services/user-service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: user_db
+      DB_USERNAME: fitnessai
+      DB_PASSWORD: fitnessai
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  profile-service:
+    build: ../backend/services/profile-service
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: profile_db
+      DB_USERNAME: fitnessai
+      DB_PASSWORD: fitnessai
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  chat-service:
+    build: ../backend/services/chat-service
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: chat_db
+      DB_USERNAME: fitnessai
+      DB_PASSWORD: fitnessai
+      REDIS_HOST: redis
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  knowledge-service:
+    build: ../backend/services/knowledge-service
+    ports:
+      - "8084:8084"
+    environment:
+      QDRANT_HOST: qdrant
+      NEO4J_HOST: neo4j
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: fitnessai123
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      - qdrant
+      - neo4j
+
+  file-service:
+    build: ../backend/services/file-service
+    ports:
+      - "8085:8085"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: file_db
+      DB_USERNAME: fitnessai
+      DB_PASSWORD: fitnessai
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: fitnessai
+      MINIO_SECRET_KEY: fitnessai123
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  charts-service:
+    build: ../backend/services/charts-service
+    ports:
+      - "8086:8086"
+    environment:
+      REDIS_HOST: redis
+      USER_SERVICE_HOST: user-service
+      PROFILE_SERVICE_HOST: profile-service
+      CHAT_SERVICE_HOST: chat-service
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
+  minio_data:

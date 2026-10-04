@@ -18,9 +18,9 @@ from qdrant_client import QdrantClient, models
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
-BACKEND_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-QDRANT_PATH      = os.path.join(BACKEND_DIR, "qdrant_storage")
-VECTORIZER_PATH  = os.path.join(BACKEND_DIR, "tfidf_vectorizer.pkl")
+AI_DIR           = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+QDRANT_PATH      = os.path.join(AI_DIR, "qdrant_storage")
+VECTORIZER_PATH  = os.path.join(AI_DIR, "tfidf_vectorizer.pkl")
 COLLECTION_NAME  = "fitness_docs"
 
 DENSE_DIM        = 1536        # text-embedding-3-small

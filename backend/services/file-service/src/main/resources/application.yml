@@ -1,0 +1,32 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: file-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:file_db}
+    username: ${DB_USERNAME:fitnessai}
+    password: ${DB_PASSWORD:fitnessai}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+# Custom properties, read via a @ConfigurationProperties(prefix = "minio")
+# class once the MinIO client bean is wired up.
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:fitnessai}
+  secret-key: ${MINIO_SECRET_KEY:fitnessai123}
+  bucket: ${MINIO_BUCKET:fitness-documents}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

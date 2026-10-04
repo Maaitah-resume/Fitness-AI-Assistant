@@ -4,13 +4,15 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 email-validator
 python-multipart
-oracledb
 openai
 langchain
+langchain-classic
 langchain-community
 langchain-openai
 langchain-text-splitters
 qdrant-client[fastembed]
 fastembed
 pypdf
-sklearn
+scikit-learn
+bcrypt
+python-jose[cryptography]

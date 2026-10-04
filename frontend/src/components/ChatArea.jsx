@@ -1,6 +1,7 @@
 // ChatArea.jsx – ChatGPT-style: one input bar, file upload + chat
 import React, { useState, useEffect, useRef } from "react";
 import { Send, Bot, User, Loader2, Paperclip, X } from "lucide-react";
+import { apiFetch } from "../api";
 
 function ChatArea({ currentChatId, onChatCreated }) {
   /* ─────────────────────────  STATE  ───────────────────────── */
@@ -13,8 +14,6 @@ function ChatArea({ currentChatId, onChatCreated }) {
 
   const messagesEndRef = useRef(null);
   const fileInputRef   = useRef(null);
-
-  const userEmail = localStorage.getItem("user_email") || "default_user@example.com";
 
   /* ─────────────────────────  HELPERS  ─────────────────────── */
   const scrollToBottom = () =>
@@ -45,10 +44,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
   /* ─────────────────────────  API CALLS  ───────────────────── */
   const loadHistory = async (chatId) => {
     try {
-      const res = await fetch(
-        `/api/v1/chats/${chatId}/messages/${encodeURIComponent(userEmail)}`
-      );
-      const result = await res.json();
+      const result = await apiFetch(`/api/v1/chats/${chatId}/messages`);
       if (result.status === "success") {
         setMessages(
           result.data.messages.map((m) => ({
@@ -72,8 +68,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
     formData.append("file", selectedFile);
 
     try {
-      const res  = await fetch("/api/v1/upload", { method: "POST", body: formData });
-      const data = await res.json();
+      const data = await apiFetch("/api/v1/upload", { method: "POST", body: formData });
 
       if (data.status === "success") {
         pushMessage("assistant", `✅ ${data.message} You can now ask me about it!`);
@@ -100,16 +95,14 @@ function ChatArea({ currentChatId, onChatCreated }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/v1/chats/send", {
+      const data = await apiFetch("/api/v1/chats/send", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message:    userMsg,
-          user_email: userEmail,
-          chat_id:    activeChatId || null,
+          message: userMsg,
+          chat_id: activeChatId || null,
         }),
       });
-      const data = await res.json();
 
       if (data.status === "success") {
         // If backend created a new chat, store it

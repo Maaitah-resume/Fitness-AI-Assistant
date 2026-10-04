@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
+import { storeSession } from '../api';
 
 function Login() {
     const [username, setUsername] = useState('');
@@ -17,10 +18,8 @@ function Login() {
             });
             const result = await response.json();
             if (result.status === 'success') {
-                localStorage.setItem('user_email', result.data.email || `${username}@example.com`);
-                localStorage.setItem('user_id', result.data.user_id);
-                localStorage.setItem('username', result.data.username);
-                navigate('/chat');
+                storeSession(result.data);
+                navigate('/dashboard');
             } else {
                 alert(result.detail || 'Login failed');
             }

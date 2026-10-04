@@ -11,7 +11,20 @@ from db import (
 from config import OPENAI_API_KEY, OPENAI_MODEL
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
-_client = OpenAI(api_key=OPENAI_API_KEY)
+# Built lazily so the server can still start (profile-building flow, auth,
+# etc. all work) when OPENAI_API_KEY hasn't been configured yet.
+_client = None
+
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        if not OPENAI_API_KEY:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set in .env — AI chat replies are unavailable."
+            )
+        _client = OpenAI(api_key=OPENAI_API_KEY)
+    return _client
 
 # ── RAG ───────────────────────────────────────────────────────────────────────
 try:
@@ -131,7 +144,8 @@ When all fields are collected, summarise and ask: workout plan, nutrition plan, 
     messages.append({"role": "user", "content": user_message})
 
     try:
-        response = _client.chat.completions.create(
+        client = _get_client()
+        response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
         )
