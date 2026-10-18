@@ -1,7 +1,7 @@
 // ChatArea.jsx – ChatGPT-style: one input bar, file upload + chat
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Bot, User, Loader2, Paperclip, X } from "lucide-react";
-import { apiFetch } from "../api";
+import { Send, Bot, User, Loader2, Paperclip, X, FileDown, BookOpen } from "lucide-react";
+import { apiDownload, apiFetch, errorMessage } from "../api";
 
 function ChatArea({ currentChatId, onChatCreated }) {
   /* ─────────────────────────  STATE  ───────────────────────── */
@@ -19,8 +19,16 @@ function ChatArea({ currentChatId, onChatCreated }) {
   const scrollToBottom = () =>
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
-  const pushMessage = (role, content, isError = false) =>
-    setMessages((prev) => [...prev, { role, content, isError }]);
+  const pushMessage = (role, content, isError = false, extras = {}) =>
+    setMessages((prev) => [...prev, { role, content, isError, ...extras }]);
+
+  const download = async (file) => {
+    try {
+      await apiDownload(file.downloadUrl, file.filename);
+    } catch (err) {
+      pushMessage("assistant", `❌ ${err.message}`, true);
+    }
+  };
 
   /* ─────────────────────────  EFFECTS  ─────────────────────── */
   useEffect(scrollToBottom, [messages]);
@@ -44,7 +52,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
   /* ─────────────────────────  API CALLS  ───────────────────── */
   const loadHistory = async (chatId) => {
     try {
-      const result = await apiFetch(`/api/v1/chats/${chatId}/messages`);
+      const result = await apiFetch(`/api/v1/chat/${chatId}/messages`);
       if (result.status === "success") {
         setMessages(
           result.data.messages.map((m) => ({
@@ -68,12 +76,14 @@ function ChatArea({ currentChatId, onChatCreated }) {
     formData.append("file", selectedFile);
 
     try {
-      const data = await apiFetch("/api/v1/upload", { method: "POST", body: formData });
+      const data = await apiFetch("/api/v1/files/upload", { method: "POST", body: formData });
 
-      if (data.status === "success") {
+      if (data.status === "success" && data.data?.status === "indexed") {
         pushMessage("assistant", `✅ ${data.message} You can now ask me about it!`);
+      } else if (data.status === "success") {
+        pushMessage("assistant", `⚠️ ${data.message}`, true);
       } else {
-        pushMessage("assistant", `❌ Upload failed: ${data.message}`, true);
+        pushMessage("assistant", `❌ Upload failed: ${errorMessage(data, "unknown error")}`, true);
       }
     } catch (err) {
       console.error("Upload error:", err);
@@ -95,7 +105,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
     setLoading(true);
 
     try {
-      const data = await apiFetch("/api/v1/chats/send", {
+      const data = await apiFetch("/api/v1/chat/send", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -110,9 +120,13 @@ function ChatArea({ currentChatId, onChatCreated }) {
           setActiveChatId(data.data.chat_id);
           onChatCreated?.(data.data.chat_id);
         }
-        pushMessage("assistant", data.data?.response || "No response received.");
+        pushMessage("assistant", data.data?.response || "No response received.", !!data.data?.degraded, {
+          files: data.data?.files || [],
+          sources: data.data?.sources || [],
+          profileUpdated: !!data.data?.profile_updated,
+        });
       } else {
-        pushMessage("assistant", "⚠️ Something went wrong. Please try again.", true);
+        pushMessage("assistant", `⚠️ ${errorMessage(data, "Something went wrong. Please try again.")}`, true);
       }
     } catch (err) {
       console.error("Chat error:", err);
@@ -152,6 +166,23 @@ function ChatArea({ currentChatId, onChatCreated }) {
             </div>
             <div className={`message-bubble ${msg.isError ? "error" : ""}`}>
               {msg.content}
+              {msg.files?.length > 0 && (
+                <div className="attachments">
+                  {msg.files.map((f) => (
+                    <button key={f.id} type="button" className="file-link" onClick={() => download(f)}>
+                      <FileDown size={16} /> {f.filename}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(msg.sources?.length > 0 || msg.profileUpdated) && (
+                <div className="message-meta">
+                  {msg.sources?.length > 0 && (
+                    <span><BookOpen size={12} /> Sources: {msg.sources.join(", ")}</span>
+                  )}
+                  {msg.profileUpdated && <span>✓ Profile updated</span>}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -318,6 +349,36 @@ function ChatArea({ currentChatId, onChatCreated }) {
           border-color: var(--accent);
           color: var(--accent);
         }
+        .attachments {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-top: 0.75rem;
+        }
+        .file-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.45rem 0.8rem;
+          border-radius: 10px;
+          border: 1px solid rgba(99,102,241,0.4);
+          background: rgba(99,102,241,0.15);
+          color: var(--text-white);
+          font-size: 0.85rem;
+          cursor: pointer;
+          white-space: normal;
+        }
+        .file-link:hover { background: rgba(99,102,241,0.3); }
+        .message-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          margin-top: 0.6rem;
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          white-space: normal;
+        }
+        .message-meta span { display: inline-flex; align-items: center; gap: 0.3rem; }
         .typing {
           display: flex;
           align-items: center;

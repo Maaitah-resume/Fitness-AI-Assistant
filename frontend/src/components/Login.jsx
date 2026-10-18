@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
-import { storeSession } from '../api';
+import { errorMessage, storeSession } from '../api';
 
 function Login() {
     const [username, setUsername] = useState('');
@@ -21,7 +21,7 @@ function Login() {
                 storeSession(result.data);
                 navigate('/dashboard');
             } else {
-                alert(result.detail || 'Login failed');
+                alert(errorMessage(result, 'Login failed'));
             }
         } catch (error) {
             console.error('Login error:', error);

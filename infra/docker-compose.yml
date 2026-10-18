@@ -1,5 +1,12 @@
 name: fitness-ai
 
+# Settings every Java service shares: where to find user-service's JWKS, the
+# issuer they all validate, and Redis (events, caching, revocation).
+x-service-env: &service-env
+  USER_SERVICE_HOST: user-service
+  JWT_ISSUER: fitness-ai-user-service
+  REDIS_HOST: redis
+
 services:
   # ── Infra ────────────────────────────────────────────────────────────────
   postgres:
@@ -60,31 +67,40 @@ services:
       - minio_data:/data
 
   # ── Services ─────────────────────────────────────────────────────────────
+  # Only the gateway publishes a host port. The services are reachable only on
+  # the compose network, so nothing can bypass the gateway's token-revocation
+  # check and rate limits. To debug one directly, temporarily add a ports: entry.
+
   api-gateway:
     build: ../backend/services/api-gateway
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      REDIS_HOST: redis
-      USER_SERVICE_HOST: user-service
+      <<: *service-env
       PROFILE_SERVICE_HOST: profile-service
       CHAT_SERVICE_HOST: chat-service
       FILE_SERVICE_HOST: file-service
       CHARTS_SERVICE_HOST: charts-service
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       redis:
         condition: service_healthy
 
   user-service:
     build: ../backend/services/user-service
-    ports:
-      - "8081:8081"
+    restart: unless-stopped
     environment:
+      <<: *service-env
       DB_HOST: postgres
       DB_NAME: user_db
       DB_USERNAME: fitnessai
       DB_PASSWORD: fitnessai
-      REDIS_HOST: redis
+      JWT_KEY_DIR: /app/keys
+      JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-1440}
+    volumes:
+      # Persists the RS256 signing key; without it every rebuild logs everyone out.
+      - jwt_keys:/app/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,9 +109,9 @@ services:
 
   profile-service:
     build: ../backend/services/profile-service
-    ports:
-      - "8082:8082"
+    restart: unless-stopped
     environment:
+      <<: *service-env
       DB_HOST: postgres
       DB_NAME: profile_db
       DB_USERNAME: fitnessai
@@ -103,18 +119,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   chat-service:
     build: ../backend/services/chat-service
-    ports:
-      - "8083:8083"
+    restart: unless-stopped
     environment:
+      <<: *service-env
       DB_HOST: postgres
       DB_NAME: chat_db
       DB_USERNAME: fitnessai
       DB_PASSWORD: fitnessai
-      REDIS_HOST: redis
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-not-configured}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      KNOWLEDGE_SERVICE_HOST: knowledge-service
+      PROFILE_SERVICE_HOST: profile-service
+      FILE_SERVICE_HOST: file-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,23 +144,30 @@ services:
 
   knowledge-service:
     build: ../backend/services/knowledge-service
-    ports:
-      - "8084:8084"
+    # Qdrant has no healthcheck and the vector store creates its collection
+    # at startup, so a too-early start just restarts until Qdrant is up.
+    restart: unless-stopped
     environment:
+      <<: *service-env
       QDRANT_HOST: qdrant
       NEO4J_HOST: neo4j
       NEO4J_USERNAME: neo4j
       NEO4J_PASSWORD: fitnessai123
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-not-configured}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     depends_on:
-      - qdrant
-      - neo4j
+      qdrant:
+        condition: service_started
+      neo4j:
+        condition: service_started
+      redis:
+        condition: service_healthy
 
   file-service:
     build: ../backend/services/file-service
-    ports:
-      - "8085:8085"
+    restart: unless-stopped
     environment:
+      <<: *service-env
       DB_HOST: postgres
       DB_NAME: file_db
       DB_USERNAME: fitnessai
@@ -147,19 +175,23 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: fitnessai
       MINIO_SECRET_KEY: fitnessai123
+      KNOWLEDGE_SERVICE_HOST: knowledge-service
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
 
   charts-service:
     build: ../backend/services/charts-service
-    ports:
-      - "8086:8086"
+    restart: unless-stopped
     environment:
-      REDIS_HOST: redis
-      USER_SERVICE_HOST: user-service
+      <<: *service-env
       PROFILE_SERVICE_HOST: profile-service
       CHAT_SERVICE_HOST: chat-service
+      FILE_SERVICE_HOST: file-service
     depends_on:
       redis:
         condition: service_healthy
@@ -169,3 +201,4 @@ volumes:
   qdrant_data:
   neo4j_data:
   minio_data:
+  jwt_keys:

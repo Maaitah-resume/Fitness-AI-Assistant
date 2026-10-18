@@ -17,6 +17,13 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+jwt:
+  # Every downstream service validates this exact string via its own
+  # "jwt.issuer" property — keep them identical.
+  issuer: ${JWT_ISSUER:fitness-ai-user-service}
+  expiry-minutes: ${JWT_EXPIRY_MINUTES:1440}
+  key-dir: ${JWT_KEY_DIR:./data/keys}
+
 management:
   endpoints:
     web:

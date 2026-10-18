@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
-import { storeSession } from '../api';
+import { errorMessage, storeSession } from '../api';
 
 function Register() {
     const [username, setUsername] = useState('');
@@ -22,7 +22,7 @@ function Register() {
                 storeSession(result.data);
                 navigate('/dashboard');
             } else {
-                alert(result.detail || 'Registration failed');
+                alert(errorMessage(result, 'Registration failed'));
             }
         } catch (error) {
             console.error('Registration error:', error);
@@ -64,7 +64,8 @@ function Register() {
                         <label>Password</label>
                         <input
                             type="password"
-                            placeholder="••••••••"
+                            placeholder="At least 8 characters"
+                            minLength={8}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required

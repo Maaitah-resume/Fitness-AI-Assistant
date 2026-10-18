@@ -31,6 +31,13 @@ export function storeSession({ access_token, user_id, username, email, role }) {
 }
 
 export function logout() {
+    // Revoke server-side too (best effort). Plain fetch, not apiFetch: a 401
+    // here must not trigger apiFetch's redirect-and-logout loop.
+    const token = getToken();
+    if (token) {
+        fetch('/api/v1/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+            .catch(() => {});
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user_id');
     localStorage.removeItem('username');
@@ -54,4 +61,23 @@ export async function apiFetch(url, options = {}) {
     }
 
     return res.json();
+}
+
+// Error text from any backend shape: services/gateway use {message}, FastAPI used {detail}.
+export function errorMessage(result, fallback) {
+    return (result && (result.message || result.detail)) || fallback;
+}
+
+// Downloads need the bearer token, which a plain <a href> can't send.
+export async function apiDownload(url, filename) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error(`Download failed (${res.status})`);
+    const objectUrl = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }

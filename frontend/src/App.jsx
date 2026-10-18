@@ -58,7 +58,7 @@ function App() {
 
     const fetchChats = async () => {
         try {
-            const result = await apiFetch('/api/v1/chats/recent');
+            const result = await apiFetch('/api/v1/chat/recent');
             if (result.status === 'success') {
                 setChats(result.data.chats);
             }

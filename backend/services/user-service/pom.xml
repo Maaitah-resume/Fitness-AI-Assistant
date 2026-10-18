@@ -21,20 +21,20 @@
         <java.version>21</java.version>
     </properties>
 
-    <!--
-      NOTE: Spring Security / OAuth2 resource server / JWT signing libraries
-      are deliberately NOT added yet. This is an init-step skeleton (boots,
-      exposes /actuator/health, connects to its own Postgres + Redis). JWT
-      issuing/validation (Decision 8 in docs/spring-boot-microservices-plan.md
-      — RS256 + JWKS) is the next phase of work, added once we're ready to
-      write and test that logic deliberately rather than inheriting Spring
-      Security's default auto-configuration (which would lock down every
-      endpoint, including /actuator/health, behind basic auth right now).
-    -->
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!-- Brings Nimbus JOSE: used both to sign tokens (JwtEncoder) and to
+             validate them on this service's own protected endpoints. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -60,6 +60,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -48,6 +48,9 @@ AI Model: OpenAI (chat completions + embeddings), hybrid RAG via Qdrant (dense +
 Analysis: Pandas, Matplotlib, Seaborn, Jupyter
 
 🚀 Quick Start
+
+> The backend is now Spring Boot microservices. See **[docs/RUNNING.md](docs/RUNNING.md)** for how to run the app. The steps below are for the legacy Python backend.
+
 1️⃣ Install dependencies (first time only)
 pip install -r requirements.txt
 

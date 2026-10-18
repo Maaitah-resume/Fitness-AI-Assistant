@@ -9,7 +9,7 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
     const handleDeleteChat = async (e, chatId) => {
         e.stopPropagation();
         try {
-            const result = await apiFetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' });
+            const result = await apiFetch(`/api/v1/chat/${chatId}`, { method: 'DELETE' });
             if (result.status === 'success') {
                 window.location.reload();
             }
