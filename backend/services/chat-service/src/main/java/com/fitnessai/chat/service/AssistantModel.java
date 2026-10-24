@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/** Thin seam around the LLM call, so the orchestration in ChatService is testable without OpenAI. */
+/** Thin seam around the LLM call, so the orchestration in ChatService is testable without Gemini. */
 @Component
 public class AssistantModel {
 

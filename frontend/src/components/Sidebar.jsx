@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, LayoutDashboard, Shield, LogOut } from 'lucide-react';
 import { apiFetch, isAdmin, logout } from '../api';
 
-function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
+function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo, historyState }) {
     const navigate = useNavigate();
 
     const handleDeleteChat = async (e, chatId) => {
@@ -35,7 +35,11 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
             </button>
 
             <div className="chat-list">
-                {chats.length === 0 ? (
+                {historyState === 'loading' ? (
+                    <div className="empty-chats">Loading chat history...</div>
+                ) : historyState === 'error' ? (
+                    <div className="empty-chats history-error">Could not load chat history.</div>
+                ) : chats.length === 0 ? (
                     <div className="empty-chats">No recent chats</div>
                 ) : (
                     chats.map(chat => (
@@ -127,6 +131,8 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo }) {
           overflow-y: auto;
           margin-bottom: 1rem;
         }
+        .empty-chats { color: var(--text-muted); padding: 1rem; text-align: center; }
+        .history-error { color: var(--accent); }
         .chat-item {
           padding: 1rem;
           border-radius: 16px;

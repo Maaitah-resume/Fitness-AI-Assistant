@@ -1,6 +1,8 @@
 // ChatArea.jsx – ChatGPT-style: one input bar, file upload + chat
 import React, { useState, useEffect, useRef } from "react";
 import { Send, Bot, User, Loader2, Paperclip, X, FileDown, BookOpen } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { apiDownload, apiFetch, errorMessage } from "../api";
 
 function ChatArea({ currentChatId, onChatCreated }) {
@@ -14,6 +16,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
 
   const messagesEndRef = useRef(null);
   const fileInputRef   = useRef(null);
+  const createdChatIdRef = useRef(null);
 
   /* ─────────────────────────  HELPERS  ─────────────────────── */
   const scrollToBottom = () =>
@@ -31,10 +34,18 @@ function ChatArea({ currentChatId, onChatCreated }) {
   };
 
   /* ─────────────────────────  EFFECTS  ─────────────────────── */
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     setActiveChatId(currentChatId);
+    // A chat we just created in handleSend is already on screen; reloading would
+    // drop replies the server didn't store (e.g. the "AI unavailable" fallback).
+    if (currentChatId && currentChatId === createdChatIdRef.current) {
+      createdChatIdRef.current = null;
+      return;
+    }
     if (currentChatId) {
       loadHistory(currentChatId);
     } else {
@@ -118,6 +129,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
         // If backend created a new chat, store it
         if (data.data?.chat_id && !activeChatId) {
           setActiveChatId(data.data.chat_id);
+          createdChatIdRef.current = data.data.chat_id;
           onChatCreated?.(data.data.chat_id);
         }
         pushMessage("assistant", data.data?.response || "No response received.", !!data.data?.degraded, {
@@ -165,7 +177,10 @@ function ChatArea({ currentChatId, onChatCreated }) {
               {msg.role === "assistant" ? <Bot size={20} /> : <User size={20} />}
             </div>
             <div className={`message-bubble ${msg.isError ? "error" : ""}`}>
-              {msg.content}
+              {/* Assistant replies are Markdown (headings, bold, lists); user text stays literal. */}
+              {msg.role === "assistant"
+                ? <div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
+                : msg.content}
               {msg.files?.length > 0 && (
                 <div className="attachments">
                   {msg.files.map((f) => (
@@ -336,6 +351,16 @@ function ChatArea({ currentChatId, onChatCreated }) {
           white-space: pre-wrap;
           box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
+        .assistant .message-bubble { white-space: normal; }
+        .markdown > :first-child { margin-top: 0; }
+        .markdown > :last-child { margin-bottom: 0; }
+        .markdown h1, .markdown h2, .markdown h3 { margin: 1rem 0 .5rem; font-size: 1.1rem; }
+        .markdown p { margin: .5rem 0; }
+        .markdown ul, .markdown ol { margin: .5rem 0; padding-left: 1.4rem; }
+        .markdown li { margin: .2rem 0; }
+        .markdown hr { border: 0; border-top: 1px solid var(--glass-border); margin: 1rem 0; }
+        .markdown table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; max-width: 100%; }
+        .markdown th, .markdown td { border: 1px solid var(--glass-border); padding: .35rem .6rem; }
         .assistant .message-bubble {
           background: rgba(255,255,255,0.04);
           border: 1px solid var(--glass-border);

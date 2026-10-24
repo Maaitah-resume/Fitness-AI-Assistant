@@ -5,6 +5,8 @@ import ChatArea from './components/ChatArea';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import Profile from './components/Profile';
+import MyPlans from './components/MyPlans';
 import AdminPanel from './components/AdminPanel';
 import logo from './assets/logo.png';
 import { apiFetch, isAdmin, isAuthenticated } from './api';
@@ -20,7 +22,13 @@ function RequireAdmin({ children }) {
 }
 
 
-function MainLayout({ chats, currentChatId, onSelectChat, onNewChat, logo, onChatCreated }) {
+function MainLayout({ chats, currentChatId, onSelectChat, onNewChat, logo, onChatCreated, onRefreshChats, chatHistoryState }) {
+    useEffect(() => {
+        onRefreshChats();
+        // Make older generated plans searchable before the user asks about them.
+        apiFetch('/api/v1/files/generated/index-pending', { method: 'POST' }).catch(() => {});
+    }, []);
+
     return (
         <div className="main-layout-wrapper">
             <Sidebar
@@ -29,6 +37,7 @@ function MainLayout({ chats, currentChatId, onSelectChat, onNewChat, logo, onCha
                 onSelectChat={onSelectChat}
                 onNewChat={onNewChat}
                 logo={logo}
+                historyState={chatHistoryState}
             />
             <ChatArea
                 currentChatId={currentChatId}
@@ -51,19 +60,21 @@ function MainLayout({ chats, currentChatId, onSelectChat, onNewChat, logo, onCha
 function App() {
     const [currentChatId, setCurrentChatId] = useState(null);
     const [chats, setChats] = useState([]);
-
-    useEffect(() => {
-        if (isAuthenticated()) fetchChats();
-    }, []);
+    const [chatHistoryState, setChatHistoryState] = useState('idle');
 
     const fetchChats = async () => {
+        setChatHistoryState('loading');
         try {
             const result = await apiFetch('/api/v1/chat/recent');
             if (result.status === 'success') {
-                setChats(result.data.chats);
+                setChats(result.data?.chats || []);
+                setChatHistoryState('ready');
+            } else {
+                setChatHistoryState('error');
             }
         } catch (error) {
             console.error('Failed to fetch chats:', error);
+            setChatHistoryState('error');
         }
     };
 
@@ -82,6 +93,14 @@ function App() {
                         element={<RequireAuth><Dashboard /></RequireAuth>}
                     />
                     <Route
+                        path="/profile"
+                        element={<RequireAuth><Profile /></RequireAuth>}
+                    />
+                    <Route
+                        path="/plans"
+                        element={<RequireAuth><MyPlans /></RequireAuth>}
+                    />
+                    <Route
                         path="/admin"
                         element={<RequireAdmin><AdminPanel /></RequireAdmin>}
                     />
@@ -96,6 +115,8 @@ function App() {
                                     onSelectChat={setCurrentChatId}
                                     onNewChat={() => setCurrentChatId(null)}
                                     logo={logo}
+                                    onRefreshChats={fetchChats}
+                                    chatHistoryState={chatHistoryState}
                                     onChatCreated={(id) => {
                                         setCurrentChatId(id);
                                         fetchChats();

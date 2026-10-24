@@ -9,23 +9,31 @@ spring:
     authentication:
       username: ${NEO4J_USERNAME:neo4j}
       password: ${NEO4J_PASSWORD:fitnessai123}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   ai:
-    openai:
-      # Spring AI refuses to start with an empty key; the placeholder lets the
-      # service boot and report the problem (see AppConfig) instead of crash-looping.
-      api-key: ${OPENAI_API_KEY:sk-not-configured}
-      chat:
-        options:
-          model: ${OPENAI_MODEL:gpt-4o-mini}
-          temperature: 0.0
-      embedding:
-        options:
-          model: text-embedding-3-small
+    google:
+      genai:
+        # Spring AI refuses to start with an empty key; the placeholder lets the
+        # service boot and report the problem (see AppConfig) instead of crash-looping.
+        api-key: ${GEMINI_API_KEY:not-configured}
+        chat:
+          options:
+            model: ${GEMINI_MODEL:gemini-3.5-flash}
+            temperature: 0.0
+        embedding:
+          api-key: ${GEMINI_API_KEY:not-configured}
+          text:
+            options:
+              model: gemini-embedding-001
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST:localhost}
         port: ${QDRANT_GRPC_PORT:6334}
-        collection-name: fitness_docs
+        # Separate from the old OpenAI collection: Gemini embeddings have a different dimension.
+        collection-name: fitness_docs_gemini
         use-tls: false
         initialize-schema: true
 

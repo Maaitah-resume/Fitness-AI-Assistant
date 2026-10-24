@@ -13,6 +13,7 @@ import com.fitnessai.chat.model.ChatMessage.Role;
 import com.fitnessai.chat.model.Conversation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -33,6 +34,9 @@ public class ChatService {
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     static final String FALLBACK_REPLY =
             "I'm having trouble reaching my AI engine right now. Your message is saved — please try again in a moment.";
+    static final String RATE_LIMITED_REPLY =
+            "I've hit the AI provider's usage limit for now. Your message is saved — please wait a minute and try again.";
+    static final String FILES_READY_NOTE = " Your document was still created — it's attached below.";
     private static final int MEMORY_TRANSCRIPT_TURNS = 12;
 
     private final ConversationStore store;
@@ -69,9 +73,16 @@ public class ChatService {
         try {
             reply = model.reply(SystemPrompt.build(profile, context), history, message, tools);
         } catch (Exception e) {
-            log.warn("LLM call failed for chat {}: {}", chatId, e.getMessage());
+            // Spring AI wraps provider errors ("Failed to generate content"); log the root cause too.
+            String cause = NestedExceptionUtils.getMostSpecificCause(e).toString();
+            log.warn("LLM call failed for chat {}: {} (root cause: {})", chatId, e.getMessage(), cause);
             memory.append(chatId, List.of(userTurn));
-            return new SendResponse(FALLBACK_REPLY, chatId, tools.generatedFiles(), tools.profileUpdated(),
+            // A 429 (quota/rate limit) is the common failure on free-tier keys; say so rather than "unreachable".
+            String fallback = cause.contains("429") || cause.toLowerCase().contains("quota")
+                    ? RATE_LIMITED_REPLY : FALLBACK_REPLY;
+            // A tool may have already produced a file before the follow-up call failed.
+            if (!tools.generatedFiles().isEmpty()) fallback += FILES_READY_NOTE;
+            return new SendResponse(fallback, chatId, tools.generatedFiles(), tools.profileUpdated(),
                     List.of(), true);
         }
         if (reply == null || reply.isBlank()) {

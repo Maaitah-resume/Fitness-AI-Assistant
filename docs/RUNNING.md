@@ -13,7 +13,7 @@ browser ──► Vite dev server :5173 ──/api──► api-gateway :8080 �
 |---|---|---|
 | Docker Desktop | recent, **running** | backend services + infrastructure |
 | Node.js + npm | 18+ | frontend |
-| OpenAI API key | — | chat replies, embeddings, GraphRAG extraction (optional to start) |
+| Gemini API key | — | chat replies, embeddings, GraphRAG extraction (optional to start) |
 
 Java and Maven are **not** required on your machine for the Docker setup: each
 service's `Dockerfile` builds itself inside a Maven container.
@@ -29,7 +29,7 @@ service's `Dockerfile` builds itself inside a Maven container.
 cp infra/.env.example infra/.env
 ```
 
-Edit `infra/.env` and set `OPENAI_API_KEY`. Without a key the stack still
+Edit `infra/.env` and set `GEMINI_API_KEY`. Without a key the stack still
 starts, but chat answers with an "AI unavailable" fallback.
 
 ## 2. Start the backend

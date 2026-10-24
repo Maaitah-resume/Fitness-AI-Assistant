@@ -30,14 +30,13 @@ public class DownstreamClients {
     private final RestClient profile;
     private final RestClient files;
 
-    public DownstreamClients(RestClient.Builder builder,
-                             @Value("${services.knowledge-service.base-url}") String knowledgeUrl,
+    public DownstreamClients(@Value("${services.knowledge-service.base-url}") String knowledgeUrl,
                              @Value("${services.profile-service.base-url}") String profileUrl,
                              @Value("${services.file-service.base-url}") String fileUrl) {
         SimpleClientHttpRequestFactory timeouts = new SimpleClientHttpRequestFactory();
         timeouts.setConnectTimeout(Duration.ofSeconds(3));
         timeouts.setReadTimeout(Duration.ofSeconds(60));
-        RestClient.Builder base = builder.clone().requestFactory(timeouts);
+        RestClient.Builder base = RestClient.builder().requestFactory(timeouts);
         this.knowledge = base.clone().baseUrl(knowledgeUrl).build();
         this.profile = base.clone().baseUrl(profileUrl).build();
         this.files = base.clone().baseUrl(fileUrl).build();

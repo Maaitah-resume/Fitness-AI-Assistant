@@ -15,12 +15,12 @@ public class KnowledgeClient {
 
     private final RestClient client;
 
-    public KnowledgeClient(RestClient.Builder builder, @Value("${services.knowledge-service.base-url}") String baseUrl) {
+    public KnowledgeClient(@Value("${services.knowledge-service.base-url}") String baseUrl) {
         SimpleClientHttpRequestFactory timeouts = new SimpleClientHttpRequestFactory();
         timeouts.setConnectTimeout(Duration.ofSeconds(3));
         // Indexing embeds every chunk; a long PDF can take a while.
         timeouts.setReadTimeout(Duration.ofMinutes(3));
-        this.client = builder.clone().requestFactory(timeouts).baseUrl(baseUrl).build();
+        this.client = RestClient.builder().requestFactory(timeouts).baseUrl(baseUrl).build();
     }
 
     public void index(String token, String documentId, String filename, boolean shared, List<String> chunks) {

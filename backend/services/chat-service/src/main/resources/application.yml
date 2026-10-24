@@ -17,13 +17,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
   ai:
-    openai:
-      # Placeholder lets the service boot without a key; see AppConfig.
-      api-key: ${OPENAI_API_KEY:sk-not-configured}
-      chat:
-        options:
-          model: ${OPENAI_MODEL:gpt-4o-mini}
-          temperature: 0.4
+    google:
+      genai:
+        # Placeholder lets the service boot without a key; see AppConfig.
+        api-key: ${GEMINI_API_KEY:not-configured}
+        chat:
+          options:
+            model: ${GEMINI_MODEL:gemini-3.5-flash}
+            temperature: 0.4
 
 jwt:
   issuer: ${JWT_ISSUER:fitness-ai-user-service}

@@ -177,10 +177,15 @@ class FileServiceIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.type").value("generated"))
-                .andExpect(jsonPath("$.data.status").value("ready"))
+                .andExpect(jsonPath("$.data.status").value("indexed"))
                 .andExpect(jsonPath("$.data.filename").value("Your 4-Week Fat Loss Plan.pdf"))
                 .andReturn().getResponse().getContentAsString();
         String url = JsonPath.read(body, "$.data.downloadUrl");
+
+        // indexed as a private document so later chats can retrieve it
+        ArgumentCaptor<List<String>> chunks = ArgumentCaptor.forClass(List.class);
+        verify(knowledge).index(eq("t"), anyString(), eq("Your 4-Week Fat Loss Plan.pdf"), eq(false), chunks.capture());
+        assertThat(String.join(" ", chunks.getValue())).contains("8k steps daily", "300 kcal deficit");
 
         byte[] downloaded = mvc.perform(get(url).with(user(7, "USER", "t")))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
@@ -193,6 +198,32 @@ class FileServiceIntegrationTest {
         mvc.perform(get("/api/v1/files/admin/stats").with(user(1, "ADMIN", "t")))
                 .andExpect(jsonPath("$.data.totalFiles").value(1))
                 .andExpect(jsonPath("$.data.byType.generated").value(1));
+    }
+
+    @Test
+    void generatedDocumentStaysDownloadableWhenIndexingFails() throws Exception {
+        doThrow(new RuntimeException("knowledge down")).when(knowledge)
+                .index(anyString(), anyString(), anyString(), anyBoolean(), anyList());
+        mvc.perform(post("/api/v1/files/generate").with(user(7, "USER", "t"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Plan","sections":[{"heading":"Day 1","body":"Squats 3x8"}]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ready"));
+
+        // once knowledge-service is back, the backfill indexes it from the stored PDF; a second run is a no-op
+        org.mockito.Mockito.reset(knowledge);
+        mvc.perform(post("/api/v1/files/generated/index-pending").with(user(7, "USER", "t")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.indexed").value(1));
+        ArgumentCaptor<List<String>> chunks = ArgumentCaptor.forClass(List.class);
+        verify(knowledge).index(eq("t"), anyString(), eq("Plan.pdf"), eq(false), chunks.capture());
+        assertThat(String.join(" ", chunks.getValue())).contains("Squats 3x8");
+        mvc.perform(post("/api/v1/files/generated/index-pending").with(user(7, "USER", "t")))
+                .andExpect(jsonPath("$.data.indexed").value(0));
+        mvc.perform(get("/api/v1/files").with(user(7, "USER", "t")))
+                .andExpect(jsonPath("$.data.files[0].status").value("indexed"));
     }
 
     @Test

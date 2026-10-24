@@ -17,9 +17,9 @@ import java.util.concurrent.Executor;
 public class AppConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AppConfig.class);
-    public static final String MISSING_KEY = "sk-not-configured";
+    public static final String MISSING_KEY = "not-configured";
 
-    @Value("${spring.ai.openai.api-key}")
+    @Value("${spring.ai.google.genai.api-key}")
     private String apiKey;
 
     /** Small, bounded pool: graph extraction is LLM-bound, and a burst of uploads shouldn't fan out unbounded. */
@@ -37,7 +37,7 @@ public class AppConfig {
     @EventListener(ApplicationReadyEvent.class)
     void warnIfNoApiKey() {
         if (MISSING_KEY.equals(apiKey)) {
-            log.warn("OPENAI_API_KEY is not set — embeddings and graph extraction will fail until it is.");
+            log.warn("GEMINI_API_KEY is not set — embeddings and graph extraction will fail until it is.");
         }
     }
 }

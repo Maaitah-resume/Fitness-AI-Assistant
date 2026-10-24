@@ -68,11 +68,17 @@ export function errorMessage(result, fallback) {
     return (result && (result.message || result.detail)) || fallback;
 }
 
-// Downloads need the bearer token, which a plain <a href> can't send.
-export async function apiDownload(url, filename) {
+// Fetches a protected file as a blob: URL (for previews). Caller must URL.revokeObjectURL it.
+export async function apiObjectUrl(url) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } });
     if (!res.ok) throw new Error(`Download failed (${res.status})`);
-    const objectUrl = URL.createObjectURL(await res.blob());
+    // Re-type as PDF so the browser renders it inline instead of downloading.
+    return URL.createObjectURL(new Blob([await res.blob()], { type: 'application/pdf' }));
+}
+
+// Downloads need the bearer token, which a plain <a href> can't send.
+export async function apiDownload(url, filename) {
+    const objectUrl = await apiObjectUrl(url);
     const a = document.createElement('a');
     a.href = objectUrl;
     a.download = filename;

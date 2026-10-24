@@ -106,7 +106,48 @@ public class FileService {
         FileRecord record = files.save(new FileRecord(caller.userId(), sanitizeFilename(req.title(), "document"),
                 Type.GENERATED, Status.READY, false, pdf.length, storageKey(caller.userId())));
         store(record, pdf);
-        return FileView.from(record);
+
+        // Index the plan so later chats can retrieve it. Chunk the source text directly
+        // rather than re-extracting it from the PDF we just rendered.
+        StringBuilder text = new StringBuilder(req.title()).append("\n\n");
+        req.sections().forEach(s -> {
+            if (s.heading() != null) text.append(s.heading()).append('\n');
+            if (s.body() != null) text.append(s.body()).append("\n\n");
+        });
+        return FileView.from(indexGenerated(caller, record, text.toString()));
+    }
+
+    /**
+     * Indexes the caller's generated plans that aren't searchable yet (made before
+     * generated plans were indexed, or whose indexing failed). Indexing needs the
+     * owner's token, so the frontend calls this rather than a background job.
+     */
+    public int indexPendingGenerated(Caller caller) {
+        int indexed = 0;
+        for (FileRecord f : files.findByOwnerId(caller.userId())) {
+            if (f.getType() != Type.GENERATED || f.getStatus() != Status.READY) continue;
+            try {
+                String text = extractor.extract(storage.get(f.getStorageKey()));
+                if (indexGenerated(caller, f, text).getStatus() == Status.INDEXED) indexed++;
+            } catch (Exception e) {
+                log.warn("Backfill indexing of generated file {} failed: {}", f.getId(), e.getMessage());
+            }
+        }
+        return indexed;
+    }
+
+    /** Index a generated plan privately; on failure it stays READY (downloadable, retried later). */
+    private FileRecord indexGenerated(Caller caller, FileRecord record, String text) {
+        List<String> chunks = TextChunker.chunk(text);
+        if (chunks.isEmpty()) return record;
+        try {
+            knowledge.index(caller.token(), record.knowledgeDocumentId(), record.getFilename(), false, chunks);
+            record.markIndexed(chunks.size());
+            return files.save(record);
+        } catch (Exception e) {
+            log.warn("Indexing generated file {} failed: {}", record.getId(), e.getMessage());
+            return record;
+        }
     }
 
     public List<FileView> mine(Caller caller) {
@@ -134,7 +175,7 @@ public class FileService {
         FileRecord f = files.findById(id)
                 .filter(r -> caller.admin() || r.getOwnerId() == caller.userId())
                 .orElseThrow(FileService::notFound);
-        if (f.getType() == Type.UPLOAD && f.getStatus() == Status.INDEXED) {
+        if (f.getStatus() == Status.INDEXED) {
             try {
                 knowledge.delete(caller.token(), f.knowledgeDocumentId());
             } catch (Exception e) {

@@ -58,6 +58,12 @@ public class FileController {
         return ApiResponse.ok(files.generate(Caller.from(jwt), req));
     }
 
+    /** Makes the caller's older generated plans searchable in chat. Idempotent; cheap when nothing is pending. */
+    @PostMapping("/generated/index-pending")
+    public ApiResponse<Map<String, Integer>> indexPendingGenerated(@AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.ok(Map.of("indexed", files.indexPendingGenerated(Caller.from(jwt))));
+    }
+
     @GetMapping({"", "/"})
     public ApiResponse<Map<String, List<FileView>>> mine(@AuthenticationPrincipal Jwt jwt) {
         return ApiResponse.ok(Map.of("files", files.mine(Caller.from(jwt))));

@@ -32,15 +32,14 @@ public class ServiceClient {
 
     private final Map<Service, RestClient> clients = new EnumMap<>(Service.class);
 
-    public ServiceClient(RestClient.Builder builder,
-                         @Value("${services.user-service.base-url}") String userUrl,
+    public ServiceClient(@Value("${services.user-service.base-url}") String userUrl,
                          @Value("${services.profile-service.base-url}") String profileUrl,
                          @Value("${services.chat-service.base-url}") String chatUrl,
                          @Value("${services.file-service.base-url}") String fileUrl) {
         SimpleClientHttpRequestFactory timeouts = new SimpleClientHttpRequestFactory();
         timeouts.setConnectTimeout(Duration.ofSeconds(2));
         timeouts.setReadTimeout(Duration.ofSeconds(8));
-        RestClient.Builder base = builder.clone().requestFactory(timeouts);
+        RestClient.Builder base = RestClient.builder().requestFactory(timeouts);
         clients.put(Service.USER, base.clone().baseUrl(userUrl).build());
         clients.put(Service.PROFILE, base.clone().baseUrl(profileUrl).build());
         clients.put(Service.CHAT, base.clone().baseUrl(chatUrl).build());

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, User, Dumbbell, Utensils, Shield, LogOut } from 'lucide-react';
+import { MessageSquare, User, Dumbbell, Shield, LogOut } from 'lucide-react';
 import { apiFetch, getUser, isAdmin, logout } from '../api';
 import { DailyBars, StatTile } from './Charts';
 
@@ -8,15 +8,23 @@ function Dashboard() {
     const navigate = useNavigate();
     const { username } = getUser();
     const [stats, setStats] = useState(null);
+    const [myProfile, setMyProfile] = useState(null);
+    const [statsError, setStatsError] = useState('');
 
     useEffect(() => {
         apiFetch('/api/v1/charts/me')
-            .then((r) => r.status === 'success' && setStats(r.data))
+            .then((r) => {
+                if (r.status !== 'success') throw new Error();
+                setStats(r.data);
+            })
+            .catch(() => setStatsError('Stats are temporarily unavailable. You can still use the app.'));
+        apiFetch('/api/v1/profile/me')
+            .then((r) => r.status === 'success' && setMyProfile(r.data))
             .catch(() => {});
     }, []);
 
-    const profile = stats?.profile;
-    const profileLine = !stats ? 'Loading your stats…'
+    const profile = myProfile ?? stats?.profile;
+    const profileLine = !profile && !statsError ? 'Loading your stats…'
         : profile?.complete ? `Goal: ${profile.goal.replace(/_/g, ' ')} · Level: ${profile.level}`
         : 'Tell GymAI your age, goal and fitness level to personalise your plans.';
 
@@ -30,24 +38,19 @@ function Dashboard() {
         },
         {
             title: 'My Profile',
-            desc: 'Update your goals, age, and fitness level.',
+            desc: profile?.complete
+                ? `${profile.age} years · ${profile.goal.replace(/_/g, ' ')} · ${profile.level}${profile.heightCm && profile.weightKg ? ` · ${profile.heightCm} cm / ${profile.weightKg} kg` : ''}`
+                : 'Set your age, body measurements, goal, and fitness level.',
             icon: <User size={32} />,
             path: '/profile',
             color: 'var(--accent)'
         },
         {
-            title: 'Workout Plans',
-            desc: 'View your personalized AI-generated routines.',
+            title: 'My Plans',
+            desc: 'Preview and download the workout and nutrition plans GymAI made for you.',
             icon: <Dumbbell size={32} />,
-            path: '/workouts',
+            path: '/plans',
             color: '#10b981'
-        },
-        {
-            title: 'Nutrition Tips',
-            desc: 'Get healthy meal ideas tailored to your goals.',
-            icon: <Utensils size={32} />,
-            path: '/nutrition',
-            color: '#f59e0b'
         },
         ...(isAdmin() ? [{
             title: 'Admin Panel',
@@ -71,6 +74,7 @@ function Dashboard() {
                 </button>
                 <h1>Welcome Back{username ? `, ${username}` : ''}</h1>
                 <p>{profileLine}</p>
+                {statsError && <p className="stats-error">{statsError}</p>}
             </header>
 
             {stats && (
