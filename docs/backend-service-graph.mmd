@@ -1,0 +1,52 @@
+flowchart LR
+    Client[Frontend / API client] -->|HTTP :8080| Gateway
+
+    subgraph Backend[Spring Boot backend/services]
+        Gateway[API Gateway<br/>routes, JWT checks, rate limits]
+        User[User Service :8081<br/>authentication and users]
+        Profile[Profile Service :8082<br/>fitness profiles]
+        Chat[Chat Service :8083<br/>AI conversations]
+        Knowledge[Knowledge Service :8084<br/>RAG and knowledge graph]
+        File[File Service :8085<br/>uploads and PDF generation]
+        Charts[Charts Service :8086<br/>aggregated statistics]
+    end
+
+    Gateway -->|/auth and /users| User
+    Gateway -->|/profile| Profile
+    Gateway -->|/chat| Chat
+    Gateway -->|/files| File
+    Gateway -->|/charts| Charts
+    Gateway -.->|JWKS and token revocation| User
+    Profile -.->|JWKS| User
+    Chat -.->|JWKS| User
+    Knowledge -.->|JWKS| User
+    File -.->|JWKS| User
+    Charts -.->|JWKS| User
+    Chat -->|retrieve/index memory| Knowledge
+    Chat -->|read/update profile| Profile
+    Chat -->|generate files| File
+    File -->|index extracted text| Knowledge
+    Charts -->|user statistics| User
+    Charts -->|profile statistics| Profile
+    Charts -->|chat statistics| Chat
+    Charts -->|file statistics| File
+    User --> UserDB[(PostgreSQL user_db)]
+    Profile --> ProfileDB[(PostgreSQL profile_db)]
+    Chat --> ChatDB[(PostgreSQL chat_db)]
+    File --> FileDB[(PostgreSQL file_db)]
+    Gateway --> Redis[(Redis)]
+    User --> Redis
+    Profile --> Redis
+    Chat --> Redis
+    Knowledge --> Redis
+    File --> Redis
+    Charts --> Redis
+    User -->|user-deleted event| Redis
+    Redis -->|cleanup event| Profile
+    Redis -->|cleanup event| File
+    Redis -->|cleanup event| Knowledge
+    File --> MinIO[(MinIO documents)]
+    Knowledge --> Qdrant[(Qdrant vectors)]
+    Knowledge --> Neo4j[(Neo4j graph)]
+    Chat --> OpenAI[OpenAI API]
+    Knowledge --> OpenAI
