@@ -62,18 +62,11 @@ Open **http://localhost:5173**. Vite proxies every `/api` call to the gateway
 at `http://127.0.0.1:8080`. To point it elsewhere, set `VITE_API_TARGET` in
 `frontend/.env`.
 
-## 4. Create an admin user
+## 4. Sign in as admin
 
-New accounts register as `USER`. To make your first admin, register in the
-UI and then promote that account:
-
-```bash
-docker compose exec postgres psql -U fitnessai -d user_db \
-  -c "UPDATE users SET role = 'ADMIN' WHERE username = 'your-username';"
-```
-
-Log out and back in so the new role is in your token. After that, admins can
-change roles from the Admin panel.
+An admin account is created on first start: username `admin`, password `Admin@12345`, unless you set
+`SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD` in `infra/.env`. Change the password after the first login.
+Admins can promote other users from the Admin portal.
 
 ## Ports and dashboards
 
@@ -116,10 +109,3 @@ docker compose down -v       # stop and delete all data (DBs, vectors, files, JW
 ```
 
 Deleting the volumes also deletes the JWT signing key, which logs every user out.
-
-## Legacy Python backend
-
-`backend/app.py` / `run_server.py` is the original FastAPI monolith, kept
-until the migration's final decommission phase (see
-[spring-boot-microservices-plan.md](spring-boot-microservices-plan.md)). The
-frontend no longer uses it, so you don't need to run it.

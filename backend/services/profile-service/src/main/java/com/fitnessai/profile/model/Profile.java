@@ -47,11 +47,16 @@ public class Profile {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    /** When the profile was first saved; null for profiles created before this column existed. */
+    @Column(name = "created_at")
+    private Instant createdAt;
+
     protected Profile() {
     }
 
     public Profile(Long userId) {
         this.userId = userId;
+        this.createdAt = Instant.now();
     }
 
     @PrePersist
@@ -76,6 +81,7 @@ public class Profile {
     public Goal getGoal() { return goal; }
     public FitnessLevel getFitnessLevel() { return fitnessLevel; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getCreatedAt() { return createdAt; }
 
     public void setAge(Integer age) { this.age = age; }
     public void setGender(Gender gender) { this.gender = gender; }

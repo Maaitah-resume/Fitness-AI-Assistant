@@ -16,6 +16,11 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  servlet:
+    multipart:
+      # meal photos (MealController caps at 8 MB)
+      max-file-size: 9MB
+      max-request-size: 10MB
   ai:
     google:
       genai:
@@ -25,6 +30,11 @@ spring:
           options:
             model: ${GEMINI_MODEL:gemini-3.5-flash}
             temperature: 0.4
+
+# Web search via Gemini's Google Search grounding (needs a key with grounding quota, i.e. billing enabled).
+web-search:
+  enabled: ${WEB_SEARCH_ENABLED:true}
+  model: ${WEB_SEARCH_MODEL:${GEMINI_MODEL:gemini-3.5-flash}}
 
 jwt:
   issuer: ${JWT_ISSUER:fitness-ai-user-service}

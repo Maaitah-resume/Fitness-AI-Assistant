@@ -1,8 +1,9 @@
 package com.fitnessai.chat.service;
 
 import com.fitnessai.chat.client.DownstreamClients;
+import com.fitnessai.chat.dto.ChatDtos.Citation;
+import com.fitnessai.chat.dto.ChatDtos.CoachPreferences;
 import com.fitnessai.chat.dto.ChatDtos.ProfileSnapshot;
-import com.fitnessai.chat.dto.ChatDtos.RetrievedChunk;
 import com.fitnessai.chat.dto.ChatDtos.RetrievedContext;
 import com.fitnessai.chat.dto.ChatDtos.SendRequest;
 import com.fitnessai.chat.dto.ChatDtos.SendResponse;
@@ -18,7 +19,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -37,6 +37,11 @@ public class ChatService {
     static final String RATE_LIMITED_REPLY =
             "I've hit the AI provider's usage limit for now. Your message is saved — please wait a minute and try again.";
     static final String FILES_READY_NOTE = " Your document was still created — it's attached below.";
+    static final String FALLBACK_REPLY_AR =
+            "أواجه صعوبة في الوصول إلى محرك الذكاء الاصطناعي الآن. تم حفظ رسالتك، حاول مرة أخرى بعد قليل.";
+    static final String RATE_LIMITED_REPLY_AR =
+            "وصلتُ إلى حد الاستخدام لدى مزوّد الذكاء الاصطناعي حاليًا. تم حفظ رسالتك، انتظر دقيقة ثم حاول مرة أخرى.";
+    static final String FILES_READY_NOTE_AR = " تم إنشاء ملفك رغم ذلك، وهو مرفق بالأسفل.";
     private static final int MEMORY_TRANSCRIPT_TURNS = 12;
 
     private final ConversationStore store;
@@ -44,9 +49,16 @@ public class ChatService {
     private final LongTermMemoryExtractor longTermMemory;
     private final DownstreamClients clients;
     private final AssistantModel model;
+    private final PromptService prompts;
+    private final WebSearch web;
+    private final UserContextService userContext;
 
     public ChatService(ConversationStore store, ShortTermMemory memory, LongTermMemoryExtractor longTermMemory,
-                       DownstreamClients clients, AssistantModel model) {
+                       DownstreamClients clients, AssistantModel model, PromptService prompts, WebSearch web,
+                       UserContextService userContext) {
+        this.prompts = prompts;
+        this.web = web;
+        this.userContext = userContext;
         this.store = store;
         this.memory = memory;
         this.longTermMemory = longTermMemory;
@@ -62,34 +74,47 @@ public class ChatService {
         // Read the window before persisting, so a cold cache rebuilt from the
         // database doesn't already contain the message we're about to send.
         List<Turn> history = memory.window(chatId);
+        long userMessagesBefore = store.countAllUserMessages(userId);
         store.saveMessage(chatId, userId, Role.USER, message);
         Turn userTurn = new Turn(Role.USER, message);
 
-        ProfileSnapshot profile = optional("profile lookup", () -> clients.myProfile(token), null);
+        // All the user's app data, cached and refreshed every few messages (see UserContextService).
+        UserContextService.UserContext site = userContext.get(userId, token, userMessagesBefore);
+        ProfileSnapshot profile = site.profile();
+        CoachPreferences preferences = site.preferences();
+        String userData = site.userData();
         RetrievedContext context = optional("retrieval", () -> clients.retrieve(token, message), RetrievedContext.EMPTY);
-        ChatTools tools = new ChatTools(token, clients);
+        ChatTools tools = new ChatTools(token, clients, web);
 
         String reply;
         try {
-            reply = model.reply(SystemPrompt.build(profile, context), history, message, tools);
+            reply = model.reply(SystemPrompt.build(prompts.activeBase(), profile, preferences, userData, context, req.arabic()), history, message, tools);
         } catch (Exception e) {
             // Spring AI wraps provider errors ("Failed to generate content"); log the root cause too.
             String cause = NestedExceptionUtils.getMostSpecificCause(e).toString();
             log.warn("LLM call failed for chat {}: {} (root cause: {})", chatId, e.getMessage(), cause);
             memory.append(chatId, List.of(userTurn));
             // A 429 (quota/rate limit) is the common failure on free-tier keys; say so rather than "unreachable".
-            String fallback = cause.contains("429") || cause.toLowerCase().contains("quota")
-                    ? RATE_LIMITED_REPLY : FALLBACK_REPLY;
+            boolean rateLimited = cause.contains("429") || cause.toLowerCase().contains("quota");
+            String fallback = req.arabic()
+                    ? (rateLimited ? RATE_LIMITED_REPLY_AR : FALLBACK_REPLY_AR)
+                    : (rateLimited ? RATE_LIMITED_REPLY : FALLBACK_REPLY);
             // A tool may have already produced a file before the follow-up call failed.
-            if (!tools.generatedFiles().isEmpty()) fallback += FILES_READY_NOTE;
+            if (!tools.generatedFiles().isEmpty()) fallback += req.arabic() ? FILES_READY_NOTE_AR : FILES_READY_NOTE;
             return new SendResponse(fallback, chatId, tools.generatedFiles(), tools.profileUpdated(),
-                    List.of(), true);
+                    List.of(), true, tools.progressLogged(), List.of());
         }
         if (reply == null || reply.isBlank()) {
             reply = "I'm not sure how to answer that — could you rephrase?";
         }
 
-        store.saveMessage(chatId, userId, Role.ASSISTANT, reply);
+        // Keep only the sources the reply actually cites (and drop markers that point nowhere).
+        List<Citation> available = new ArrayList<>(Citations.documents(context).values());
+        available.addAll(tools.webCitations());
+        reply = Citations.stripUnknown(reply, available);
+        List<Citation> cited = Citations.cited(reply, available);
+
+        store.saveMessage(chatId, userId, Role.ASSISTANT, reply, Citations.toJson(cited));
         Turn assistantTurn = new Turn(Role.ASSISTANT, reply);
         memory.append(chatId, List.of(userTurn, assistantTurn));
 
@@ -97,23 +122,18 @@ public class ChatService {
             List<Turn> recent = new ArrayList<>(history);
             recent.add(userTurn);
             recent.add(assistantTurn);
-            longTermMemory.extractAndStore(token,
+            longTermMemory.extractAndStore(userId, token,
                     recent.subList(Math.max(0, recent.size() - MEMORY_TRANSCRIPT_TURNS), recent.size()));
         }
 
-        return new SendResponse(reply, chatId, tools.generatedFiles(), tools.profileUpdated(),
-                sources(context), false);
-    }
-
-    static List<String> sources(RetrievedContext context) {
-        if (context == null || context.chunks() == null) {
-            return List.of();
+        // The coach changed the user's data: the next message must see it, not the cached snapshot.
+        if (tools.profileUpdated() || tools.progressLogged() || !tools.generatedFiles().isEmpty()) {
+            userContext.invalidate(userId);
         }
-        return context.chunks().stream()
-                .map(RetrievedChunk::filename)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+
+        return new SendResponse(reply, chatId, tools.generatedFiles(), tools.profileUpdated(),
+                cited.stream().filter(c -> "document".equals(c.kind())).map(Citation::title).toList(),
+                false, tools.progressLogged(), cited);
     }
 
     private static <T> T optional(String what, Supplier<T> call, T fallback) {

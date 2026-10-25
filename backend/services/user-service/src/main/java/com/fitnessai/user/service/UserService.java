@@ -1,6 +1,8 @@
 package com.fitnessai.user.service;
 
 import com.fitnessai.user.dto.AuthDtos.AuthResponse;
+import com.fitnessai.user.dto.AuthDtos.DeleteAccountRequest;
+import com.fitnessai.user.dto.AuthDtos.PasswordChangeRequest;
 import com.fitnessai.user.dto.AuthDtos.LoginRequest;
 import com.fitnessai.user.dto.AuthDtos.RegisterRequest;
 import com.fitnessai.user.dto.AuthDtos.UserResponse;
@@ -74,6 +76,38 @@ public class UserService {
         revocations.revoke(jwt.getId(), jwt.getExpiresAt());
     }
 
+    @Transactional
+    public void changePassword(long userId, PasswordChangeRequest req) {
+        User user = find(userId);
+        if (!passwordEncoder.matches(req.currentPassword(), user.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Current password is incorrect.");
+        }
+        if (passwordEncoder.matches(req.newPassword(), user.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The new password must be different from the current one.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+    }
+
+    /**
+     * A user deleting their own account: re-check the password, refuse to remove the last admin,
+     * then delete, revoke this token and announce it so every service drops the user's data.
+     */
+    @Transactional
+    public void deleteSelf(Jwt jwt, DeleteAccountRequest req) {
+        long userId = Long.parseLong(jwt.getSubject());
+        User user = find(userId);
+        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Password is incorrect.");
+        }
+        if (user.getRole() == Role.ADMIN && users.countByRole(Role.ADMIN) <= 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "You are the only admin. Make another user an admin before deleting your account.");
+        }
+        users.delete(user);
+        revocations.revoke(jwt.getId(), jwt.getExpiresAt());
+        events.userDeleted(userId);
+    }
+
     public UserResponse me(long userId) {
         return UserResponse.from(find(userId));
     }
@@ -92,6 +126,11 @@ public class UserService {
         User user = find(targetId);
         user.setRole(role);
         return UserResponse.from(user);
+    }
+
+    @Transactional
+    public void resetPassword(long targetId, String newPassword) {
+        find(targetId).setPasswordHash(passwordEncoder.encode(newPassword));
     }
 
     @Transactional

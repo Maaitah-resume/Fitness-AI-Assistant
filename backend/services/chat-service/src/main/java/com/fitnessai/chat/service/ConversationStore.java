@@ -44,8 +44,19 @@ public class ConversationStore {
 
     @Transactional
     public void saveMessage(long conversationId, long userId, ChatMessage.Role role, String content) {
-        messages.save(new ChatMessage(conversationId, userId, role, content));
+        saveMessage(conversationId, userId, role, content, null);
+    }
+
+    @Transactional
+    public void saveMessage(long conversationId, long userId, ChatMessage.Role role, String content, String citations) {
+        messages.save(new ChatMessage(conversationId, userId, role, content, citations));
         conversations.findById(conversationId).ifPresent(c -> c.recordMessage(content));
+    }
+
+    /** User messages across all of the user's conversations. */
+    @Transactional(readOnly = true)
+    public long countAllUserMessages(long userId) {
+        return messages.countByUserIdAndRole(userId, ChatMessage.Role.USER);
     }
 
     @Transactional(readOnly = true)

@@ -24,6 +24,13 @@ jwt:
   expiry-minutes: ${JWT_EXPIRY_MINUTES:1440}
   key-dir: ${JWT_KEY_DIR:./data/keys}
 
+# Admin account created on first start (see AdminSeeder). Override in infra/.env.
+seed:
+  admin:
+    username: ${SEED_ADMIN_USERNAME:admin}
+    password: ${SEED_ADMIN_PASSWORD:Admin@12345}
+    email: ${SEED_ADMIN_EMAIL:admin@gymai.local}
+
 management:
   endpoints:
     web:
