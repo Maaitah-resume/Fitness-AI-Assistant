@@ -1,11 +1,52 @@
-// ChatArea.jsx – ChatGPT-style: one input bar, file upload + chat
+// ChatArea.jsx – the coaching thread: messages plus one composer for text and PDF upload
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Bot, User, Loader2, Paperclip, X, FileDown, BookOpen } from "lucide-react";
+import { Send, Loader2, Paperclip, X, FileDown, BookOpen, Check, TrendingUp, Globe } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiDownload, apiFetch, errorMessage } from "../api";
+import { useI18n } from "../i18n";
+
+// Inline source markers from the coach: [S1] (a document) or [W2] (a web page), possibly grouped: [S1, W2].
+const CITE_MARKER = /\[((?:[SW]\d+)(?:\s*,\s*[SW]\d+)*)\]/g;
+
+/** Turns markers into numbered links ReactMarkdown can render; markers without a known source are dropped. */
+function linkCitations(text, citations = []) {
+  if (!text) return text;
+  return text.replace(CITE_MARKER, (_, ids) =>
+    ids.split(/\s*,\s*/)
+      .map((id) => citations.findIndex((c) => c.id === id))
+      .filter((n) => n >= 0)
+      .map((n) => `[${n + 1}](#cite-${citations[n].id})`)
+      .join(""));
+}
+
+/** One assistant reply: Markdown with superscript citation links. */
+function AssistantText({ content, citations }) {
+  const components = {
+    a: ({ href = "", children, ...rest }) => {
+      if (href.startsWith("#cite-")) {
+        const c = citations.find((x) => `#cite-${x.id}` === href);
+        if (!c) return null;
+        return (
+          <sup className="cite">
+            {c.url
+              ? <a href={c.url} target="_blank" rel="noreferrer noopener" title={c.title}>{children}</a>
+              : <span title={c.title}>{children}</span>}
+          </sup>
+        );
+      }
+      return <a href={href} target="_blank" rel="noreferrer noopener" {...rest}>{children}</a>;
+    },
+  };
+  return (
+    <div className="markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkCitations(content, citations)}</ReactMarkdown>
+    </div>
+  );
+}
 
 function ChatArea({ currentChatId, onChatCreated }) {
+  const { t, lang } = useI18n();
   /* ─────────────────────────  STATE  ───────────────────────── */
   const [messages,     setMessages]     = useState([]);
   const [input,        setInput]        = useState("");
@@ -22,14 +63,15 @@ function ChatArea({ currentChatId, onChatCreated }) {
   const scrollToBottom = () =>
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
+  // isNew marks messages added in this session, so only they animate in (not loaded history).
   const pushMessage = (role, content, isError = false, extras = {}) =>
-    setMessages((prev) => [...prev, { role, content, isError, ...extras }]);
+    setMessages((prev) => [...prev, { role, content, isError, isNew: true, ...extras }]);
 
   const download = async (file) => {
     try {
       await apiDownload(file.downloadUrl, file.filename);
     } catch (err) {
-      pushMessage("assistant", `❌ ${err.message}`, true);
+      pushMessage("assistant", err.message, true);
     }
   };
 
@@ -49,13 +91,8 @@ function ChatArea({ currentChatId, onChatCreated }) {
     if (currentChatId) {
       loadHistory(currentChatId);
     } else {
-      setMessages([
-        {
-          role: "assistant",
-          content:
-            "Welcome! I'm your Fitness AI. Ask me anything about fitness, nutrition, or upload a PDF and I'll answer questions about it.",
-        },
-      ]);
+      // Rendered from the dictionary at display time, so it follows the language toggle.
+      setMessages([{ role: "assistant", welcome: true }]);
     }
     setSelectedFile(null);
   }, [currentChatId]);
@@ -69,6 +106,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
           result.data.messages.map((m) => ({
             role:    m.role,
             content: m.message,
+            citations: m.citations || [],
           }))
         );
       }
@@ -81,7 +119,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
   const handleUpload = async () => {
     if (!selectedFile) return;
     setUploading(true);
-    pushMessage("user", `📎 Uploading: ${selectedFile.name}`);
+    pushMessage("user", t("chat.attached", { name: selectedFile.name }));
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -90,15 +128,15 @@ function ChatArea({ currentChatId, onChatCreated }) {
       const data = await apiFetch("/api/v1/files/upload", { method: "POST", body: formData });
 
       if (data.status === "success" && data.data?.status === "indexed") {
-        pushMessage("assistant", `✅ ${data.message} You can now ask me about it!`);
+        pushMessage("assistant", t("chat.uploadOk", { msg: data.message }));
       } else if (data.status === "success") {
-        pushMessage("assistant", `⚠️ ${data.message}`, true);
+        pushMessage("assistant", data.message, true);
       } else {
-        pushMessage("assistant", `❌ Upload failed: ${errorMessage(data, "unknown error")}`, true);
+        pushMessage("assistant", t("chat.uploadFailed", { err: errorMessage(data, "?") }), true);
       }
     } catch (err) {
       console.error("Upload error:", err);
-      pushMessage("assistant", "❌ Upload failed — check file type and try again.", true);
+      pushMessage("assistant", t("chat.uploadFailedType"), true);
     } finally {
       setUploading(false);
       setSelectedFile(null);
@@ -122,6 +160,7 @@ function ChatArea({ currentChatId, onChatCreated }) {
         body: JSON.stringify({
           message: userMsg,
           chat_id: activeChatId || null,
+          language: lang,
         }),
       });
 
@@ -132,17 +171,18 @@ function ChatArea({ currentChatId, onChatCreated }) {
           createdChatIdRef.current = data.data.chat_id;
           onChatCreated?.(data.data.chat_id);
         }
-        pushMessage("assistant", data.data?.response || "No response received.", !!data.data?.degraded, {
+        pushMessage("assistant", data.data?.response || t("chat.noResponse"), !!data.data?.degraded, {
           files: data.data?.files || [],
-          sources: data.data?.sources || [],
+          citations: data.data?.citations || [],
           profileUpdated: !!data.data?.profile_updated,
+          progressLogged: !!data.data?.progress_logged,
         });
       } else {
-        pushMessage("assistant", `⚠️ ${errorMessage(data, "Something went wrong. Please try again.")}`, true);
+        pushMessage("assistant", errorMessage(data, t("chat.sendFailed")), true);
       }
     } catch (err) {
       console.error("Chat error:", err);
-      pushMessage("assistant", "❌ Connection error — try again later.", true);
+      pushMessage("assistant", t("chat.offline"), true);
     } finally {
       setLoading(false);
     }
@@ -167,59 +207,60 @@ function ChatArea({ currentChatId, onChatCreated }) {
   };
 
   /* ─────────────────────────  RENDER  ──────────────────────── */
+  const busy = loading || uploading;
+
   return (
-    <section className="chat-area glass">
-      {/* ── Message list ── */}
-      <div className="messages-container">
+    <section className="thread" aria-label={t("chat.region")}>
+      <div className="thread-messages" aria-live="polite">
         {messages.map((msg, i) => (
-          <div key={i} className={`message-row ${msg.role}`}>
-            <div className="avatar">
-              {msg.role === "assistant" ? <Bot size={20} /> : <User size={20} />}
+          <div key={i} className={`msg msg-${msg.role}${msg.isError ? " msg-error" : ""}${msg.isNew ? " msg-new" : ""}`}>
+            <span className="msg-who">{msg.role === "assistant" ? t("chat.coach") : t("chat.you")}</span>
+            <div className="msg-body" dir="auto">
+              {/* Assistant replies are Markdown (headings, bold, lists, tables); user text stays literal. */}
+              {msg.welcome
+                ? t("chat.welcome")
+                : msg.role === "assistant"
+                  ? <AssistantText content={msg.content} citations={msg.citations || []} />
+                  : msg.content}
             </div>
-            <div className={`message-bubble ${msg.isError ? "error" : ""}`}>
-              {/* Assistant replies are Markdown (headings, bold, lists); user text stays literal. */}
-              {msg.role === "assistant"
-                ? <div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
-                : msg.content}
-              {msg.files?.length > 0 && (
-                <div className="attachments">
-                  {msg.files.map((f) => (
-                    <button key={f.id} type="button" className="file-link" onClick={() => download(f)}>
-                      <FileDown size={16} /> {f.filename}
-                    </button>
+            {msg.files?.length > 0 && (
+              <div className="msg-files">
+                {msg.files.map((f) => (
+                  <button key={f.id} type="button" className="btn btn-small" onClick={() => download(f)}>
+                    <FileDown size={15} aria-hidden="true" /> {t("chat.download", { name: f.filename })}
+                  </button>
+                ))}
+              </div>
+            )}
+            {msg.citations?.length > 0 && (
+              <div className="msg-sources">
+                <span className="msg-sources-title">{t("chat.sources")}</span>
+                <ol>
+                  {msg.citations.map((c) => (
+                    <li key={c.id}>
+                      {c.kind === "web"
+                        ? <><Globe size={13} aria-hidden="true" /> <a href={c.url} target="_blank" rel="noreferrer noopener" dir="auto">{c.title}</a></>
+                        : <><BookOpen size={13} aria-hidden="true" /> <span dir="auto">{c.title}</span> <span className="msg-sources-kind">{t("chat.sourceDoc")}</span></>}
+                    </li>
                   ))}
-                </div>
-              )}
-              {(msg.sources?.length > 0 || msg.profileUpdated) && (
-                <div className="message-meta">
-                  {msg.sources?.length > 0 && (
-                    <span><BookOpen size={12} /> Sources: {msg.sources.join(", ")}</span>
-                  )}
-                  {msg.profileUpdated && <span>✓ Profile updated</span>}
-                </div>
-              )}
-            </div>
+                </ol>
+              </div>
+            )}
+            {(msg.profileUpdated || msg.progressLogged) && (
+              <div className="msg-meta">
+                {msg.progressLogged && <span><TrendingUp size={13} aria-hidden="true" /> {t("chat.progressLogged")}</span>}
+                {msg.profileUpdated && <span><Check size={13} aria-hidden="true" /> {t("chat.profileUpdated")}</span>}
+              </div>
+            )}
           </div>
         ))}
 
-        {/* Thinking indicator */}
-        {loading && (
-          <div className="message-row assistant">
-            <div className="avatar"><Bot size={20} /></div>
-            <div className="message-bubble typing">
-              <Loader2 className="spinner" size={18} />
-              <span>Thinking…</span>
-            </div>
-          </div>
-        )}
-
-        {/* Upload indicator */}
-        {uploading && (
-          <div className="message-row assistant">
-            <div className="avatar"><Bot size={20} /></div>
-            <div className="message-bubble typing">
-              <Loader2 className="spinner" size={18} />
-              <span>Indexing your PDF…</span>
+        {busy && (
+          <div className="msg msg-assistant msg-typing msg-new">
+            <span className="msg-who">{t("chat.coach")}</span>
+            <div className="msg-body">
+              <Loader2 className="spin" size={16} aria-hidden="true" />
+              <span>{uploading ? t("chat.readingPdf") : t("chat.thinking")}</span>
             </div>
           </div>
         )}
@@ -227,302 +268,68 @@ function ChatArea({ currentChatId, onChatCreated }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ── Input bar ── */}
-      <form className="input-area" onSubmit={handleSubmit}>
-        <div className="input-glass">
-
-          {/* Hidden file input */}
+      <form className="composer" onSubmit={handleSubmit}>
+        <div className="composer-box">
           <input
             ref={fileInputRef}
             type="file"
             accept=".pdf"
-            style={{ display: "none" }}
+            hidden
             onChange={(e) => setSelectedFile(e.target.files[0] || null)}
           />
-
-          {/* Paperclip button */}
           <button
             type="button"
-            className="icon-btn paperclip"
-            title="Upload PDF"
+            className="icon-btn"
+            aria-label={t("chat.attachPdf")}
+            title={t("chat.attachPdf")}
             onClick={() => fileInputRef.current?.click()}
-            disabled={loading || uploading}
+            disabled={busy}
           >
-            <Paperclip size={18} />
+            <Paperclip size={18} aria-hidden="true" />
           </button>
 
-          {/* File pill + text input always visible together */}
-          <div className="input-middle">
-            {selectedFile && (
-              <div className="file-pill">
-                <span className="file-name">{selectedFile.name}</span>
-                <button
-                  type="button"
-                  className="remove-file"
-                  onClick={() => {
-                    setSelectedFile(null);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-            <input
-              type="text"
-              className="text-input"
-              placeholder={selectedFile ? "Ask about your PDF…" : "Ask a fitness question…"}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={loading || uploading}
-            />
-          </div>
+          {selectedFile && (
+            <span className="composer-file">
+              <span className="composer-file-name">{selectedFile.name}</span>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={t("chat.remove", { name: selectedFile.name })}
+                onClick={() => {
+                  setSelectedFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </span>
+          )}
 
-          {/* Send / Upload button */}
+          <label htmlFor="composer-input" className="visually-hidden">{t("chat.messageCoach")}</label>
+          <input
+            id="composer-input"
+            type="text"
+            className="composer-input"
+            placeholder={selectedFile ? t("chat.placeholderPdf") : t("chat.placeholder")}
+            dir="auto"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={busy}
+            autoComplete="off"
+          />
+
           <button
             type="submit"
-            className="icon-btn send"
-            disabled={loading || uploading || (!input.trim() && !selectedFile)}
+            className="btn btn-primary btn-small"
+            disabled={busy || (!input.trim() && !selectedFile)}
           >
-            {loading || uploading
-              ? <Loader2 size={18} className="spinner" />
-              : <Send size={18} />}
+            {busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : <Send size={16} aria-hidden="true" className="flip-rtl" />}
+            {t("chat.send")}
           </button>
         </div>
+        <p className="composer-hint">{t("chat.hint")}</p>
       </form>
-
-      {/* ── Styles ── */}
-      <style jsx>{`
-        .chat-area {
-          flex: 1;
-          border-radius: 24px;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-        .messages-container {
-          flex: 1;
-          padding: 2.5rem;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-        }
-        .message-row {
-          display: flex;
-          gap: 1rem;
-          max-width: 85%;
-          animation: messageReveal 0.3s ease-out backwards;
-        }
-        @keyframes messageReveal {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .message-row.user {
-          align-self: flex-end;
-          flex-direction: row-reverse;
-        }
-        .avatar {
-          width: 38px;
-          height: 38px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(255,255,255,0.05);
-          border: 1px solid var(--glass-border);
-          flex-shrink: 0;
-        }
-        .assistant .avatar {
-          background: rgba(99,102,241,0.2);
-          border-color: rgba(99,102,241,0.3);
-          color: var(--primary-light);
-        }
-        .user .avatar {
-          background: rgba(244,63,94,0.2);
-          border-color: rgba(244,63,94,0.3);
-          color: var(--accent);
-        }
-        .message-bubble {
-          padding: 0.9rem 1.3rem;
-          border-radius: 18px;
-          line-height: 1.65;
-          white-space: pre-wrap;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .assistant .message-bubble { white-space: normal; }
-        .markdown > :first-child { margin-top: 0; }
-        .markdown > :last-child { margin-bottom: 0; }
-        .markdown h1, .markdown h2, .markdown h3 { margin: 1rem 0 .5rem; font-size: 1.1rem; }
-        .markdown p { margin: .5rem 0; }
-        .markdown ul, .markdown ol { margin: .5rem 0; padding-left: 1.4rem; }
-        .markdown li { margin: .2rem 0; }
-        .markdown hr { border: 0; border-top: 1px solid var(--glass-border); margin: 1rem 0; }
-        .markdown table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; max-width: 100%; }
-        .markdown th, .markdown td { border: 1px solid var(--glass-border); padding: .35rem .6rem; }
-        .assistant .message-bubble {
-          background: rgba(255,255,255,0.04);
-          border: 1px solid var(--glass-border);
-          border-top-left-radius: 4px;
-        }
-        .user .message-bubble {
-          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-          border-top-right-radius: 4px;
-        }
-        .message-bubble.error {
-          border-color: var(--accent);
-          color: var(--accent);
-        }
-        .attachments {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          margin-top: 0.75rem;
-        }
-        .file-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.4rem;
-          padding: 0.45rem 0.8rem;
-          border-radius: 10px;
-          border: 1px solid rgba(99,102,241,0.4);
-          background: rgba(99,102,241,0.15);
-          color: var(--text-white);
-          font-size: 0.85rem;
-          cursor: pointer;
-          white-space: normal;
-        }
-        .file-link:hover { background: rgba(99,102,241,0.3); }
-        .message-meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.75rem;
-          margin-top: 0.6rem;
-          font-size: 0.75rem;
-          color: var(--text-muted);
-          white-space: normal;
-        }
-        .message-meta span { display: inline-flex; align-items: center; gap: 0.3rem; }
-        .typing {
-          display: flex;
-          align-items: center;
-          gap: 0.6rem;
-          color: var(--text-muted);
-        }
-        .spinner {
-          animation: spin 1.2s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-
-        /* ── Input area ── */
-        .input-area {
-          padding: 1.5rem 2rem;
-          background: rgba(15,23,42,0.3);
-          border-top: 1px solid var(--glass-border);
-        }
-        .input-glass {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          background: rgba(255,255,255,0.05);
-          padding: 0.5rem 0.75rem 0.5rem 1rem;
-          border-radius: 100px;
-          border: 1px solid var(--glass-border);
-          transition: border-color 0.25s, box-shadow 0.25s;
-        }
-        .input-glass:focus-within {
-          border-color: var(--primary);
-          box-shadow: 0 0 0 4px rgba(99,102,241,0.15);
-        }
-        .text-input {
-          flex: 1;
-          background: transparent;
-          border: none;
-          color: white;
-          outline: none;
-          font-family: inherit;
-          font-size: 1rem;
-          min-width: 0;
-        }
-        .text-input::placeholder { color: var(--text-muted); }
-
-        /* File pill shown when a file is selected */
-        .file-pill {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: rgba(99,102,241,0.15);
-          border: 1px solid rgba(99,102,241,0.35);
-          border-radius: 100px;
-          padding: 0.3rem 0.75rem;
-          min-width: 0;
-        }
-        .file-name {
-          flex: 1;
-          font-size: 0.85rem;
-          color: var(--primary-light);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .remove-file {
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          padding: 0;
-          flex-shrink: 0;
-        }
-        .remove-file:hover { color: var(--accent); }
-
-        /* Icon buttons (paperclip + send) */
-        .icon-btn {
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 6px;
-          border-radius: 50%;
-          transition: color 0.2s, background 0.2s;
-          flex-shrink: 0;
-        }
-        .icon-btn:hover:not(:disabled) {
-          color: white;
-          background: rgba(255,255,255,0.08);
-        }
-        .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .icon-btn.paperclip:hover:not(:disabled) { color: var(--primary-light); }
-        .icon-btn.send {
-          background: var(--primary);
-          color: white;
-          padding: 8px;
-        }
-        .icon-btn.send:hover:not(:disabled) { background: var(--primary-dark); }
-        .icon-btn.send:disabled { background: rgba(99,102,241,0.3); }
-        /* Middle flex area holding pill + text input */
-        .input-middle {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          min-width: 0;
-        }
-        .input-middle .text-input {
-          flex: 1;
-          min-width: 0;
-        }
-
-      `}</style>
     </section>
   );
 }

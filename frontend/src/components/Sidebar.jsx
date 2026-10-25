@@ -1,15 +1,18 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, LayoutDashboard, Shield, LogOut } from 'lucide-react';
-import { apiFetch, isAdmin, logout } from '../api';
+import { Plus, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { usePersistentToggle } from '../usePersistentToggle';
+import { apiFetch } from '../api';
+import { useI18n } from '../i18n';
 
-function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo, historyState }) {
-    const navigate = useNavigate();
+// Conversation list beside the chat thread (app navigation lives in AppShell's rail).
+function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, historyState }) {
+    const { t } = useI18n();
+    const [collapsed, toggleCollapsed] = usePersistentToggle('gymai.convos.collapsed');
 
-    const handleDeleteChat = async (e, chatId) => {
-        e.stopPropagation();
+    const handleDeleteChat = async (chat) => {
+        if (!window.confirm(t('chat.deleteConfirm', { title: chat.title || t('chat.thisConversation') }))) return;
         try {
-            const result = await apiFetch(`/api/v1/chat/${chatId}`, { method: 'DELETE' });
+            const result = await apiFetch(`/api/v1/chat/${chat.id}`, { method: 'DELETE' });
             if (result.status === 'success') {
                 window.location.reload();
             }
@@ -18,199 +21,69 @@ function Sidebar({ chats, currentChatId, onSelectChat, onNewChat, logo, historyS
         }
     };
 
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
+    const toggle = (
+        <button type="button" className="panel-toggle convos-toggle" onClick={toggleCollapsed} aria-expanded={!collapsed}
+                title={collapsed ? t('chat.showList') : t('chat.hideList')} aria-label={collapsed ? t('chat.showList') : t('chat.hideList')}>
+            {collapsed ? <PanelLeftOpen size={18} aria-hidden="true" className="flip-rtl" />
+                       : <PanelLeftClose size={18} aria-hidden="true" className="flip-rtl" />}
+        </button>
+    );
+
+    if (collapsed) {
+        return (
+            <aside className="convos is-collapsed" aria-label={t('chat.conversations')}>
+                {toggle}
+                <button type="button" className="panel-toggle convos-new-mini" onClick={onNewChat} title={t('chat.new')} aria-label={t('chat.new')}>
+                    <Plus size={18} aria-hidden="true" />
+                </button>
+            </aside>
+        );
+    }
+
     return (
-        <aside className="sidebar glass">
-            <div className="sidebar-header">
-                <img src={logo} alt="Fitness AI Logo" className="logo-img" />
-                <h2>Fitness AI</h2>
+        <aside className="convos" aria-label={t('chat.conversations')}>
+            <div className="convos-head">
+                <div className="convos-title-row">
+                    <h2 className="convos-title">{t('chat.conversations')}</h2>
+                    {toggle}
+                </div>
+                {/* Narrow screens: the list collapses into this picker (see .convos-pick in index.css). */}
+                <label className="convos-pick">
+                    <span className="visually-hidden">{t('chat.open')}</span>
+                    <select className="input" dir="auto" value={currentChatId ?? ''}
+                            onChange={(e) => (e.target.value ? onSelectChat(Number(e.target.value)) : onNewChat())}>
+                        <option value="">{t('chat.new')}</option>
+                        {chats.map((chat) => <option key={chat.id} value={chat.id}>{chat.title || t('chat.new')}</option>)}
+                    </select>
+                </label>
+                <button type="button" className="btn btn-primary btn-block convos-new" onClick={onNewChat}>
+                    <Plus size={18} aria-hidden="true" /> <span className="convos-new-label">{t('chat.new')}</span>
+                </button>
             </div>
 
-            <button className="new-chat-btn" onClick={onNewChat}>
-                <Plus size={20} />
-                <span>New Conversation</span>
-            </button>
-
-            <div className="chat-list">
-                {historyState === 'loading' ? (
-                    <div className="empty-chats">Loading chat history...</div>
+            <div className="convos-list">
+                {historyState === 'loading' && chats.length === 0 ? (
+                    <p className="convos-empty">{t('chat.loading')}</p>
                 ) : historyState === 'error' ? (
-                    <div className="empty-chats history-error">Could not load chat history.</div>
+                    <p className="convos-empty is-error">{t('chat.loadError')}</p>
                 ) : chats.length === 0 ? (
-                    <div className="empty-chats">No recent chats</div>
+                    <p className="convos-empty">{t('chat.none')}</p>
                 ) : (
                     chats.map(chat => (
-                        <div
-                            key={chat.id}
-                            className={`chat-item ${currentChatId === chat.id ? 'active' : ''}`}
-                            onClick={() => onSelectChat(chat.id)}
-                        >
-                            <div className="chat-info">
-                                <span className="chat-title">{chat.title || 'New Chat'}</span>
-                                <span className="chat-preview">{chat.last_message || 'No messages yet'}</span>
-                            </div>
-                            <button className="delete-btn" onClick={(e) => handleDeleteChat(e, chat.id)}>
-                                <Trash2 size={16} />
+                        <div key={chat.id} className={`convo${currentChatId === chat.id ? ' active' : ''}`}>
+                            <button type="button" className="convo-open" onClick={() => onSelectChat(chat.id)}
+                                    aria-current={currentChatId === chat.id ? 'true' : undefined}>
+                                <span className="convo-title" dir="auto">{chat.title || t('chat.new')}</span>
+                                <span className="convo-preview" dir="auto">{chat.last_message || t('chat.noMessages')}</span>
+                            </button>
+                            <button type="button" className="convo-delete" onClick={() => handleDeleteChat(chat)}
+                                    aria-label={t('chat.deleteLabel', { title: chat.title || t('chat.thisConversation') })}>
+                                <Trash2 size={16} aria-hidden="true" />
                             </button>
                         </div>
                     ))
                 )}
             </div>
-
-            <div className="sidebar-footer">
-                <a href="/dashboard" className="footer-link">
-                    <LayoutDashboard size={18} />
-                    <span>Dashboard</span>
-                </a>
-                {isAdmin() && (
-                    <a href="/admin" className="footer-link">
-                        <Shield size={18} />
-                        <span>Admin Panel</span>
-                    </a>
-                )}
-                <button type="button" className="footer-link logout-btn" onClick={handleLogout}>
-                    <LogOut size={18} />
-                    <span>Log Out</span>
-                </button>
-            </div>
-
-            <style jsx>{`
-        .sidebar {
-          width: 320px;
-          height: 100%;
-          border-radius: 24px;
-          display: flex;
-          flex-direction: column;
-          padding: 1.5rem;
-          overflow: hidden;
-        }
-        .sidebar-header {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          margin-bottom: 2rem;
-        }
-        .logo-img {
-          width: 40px;
-          height: 40px;
-          object-fit: cover;
-          border-radius: 10px;
-          box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-        .sidebar-header h2 {
-          font-size: 1.25rem;
-          background: linear-gradient(135deg, var(--text-white), var(--primary-light));
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .new-chat-btn {
-          width: 100%;
-          padding: 1rem;
-          border-radius: 16px;
-          background: var(--primary);
-          border: none;
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.75rem;
-          font-weight: 600;
-          margin-bottom: 2rem;
-          box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
-        }
-        .new-chat-btn:hover {
-          transform: translateY(-2px);
-          filter: brightness(1.1);
-        }
-        .chat-list {
-          flex: 1;
-          overflow-y: auto;
-          margin-bottom: 1rem;
-        }
-        .empty-chats { color: var(--text-muted); padding: 1rem; text-align: center; }
-        .history-error { color: var(--accent); }
-        .chat-item {
-          padding: 1rem;
-          border-radius: 16px;
-          margin-bottom: 0.5rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          transition: all 0.2s;
-          cursor: pointer;
-          border: 1px solid transparent;
-        }
-        .chat-item:hover {
-          background: rgba(255, 255, 255, 0.05);
-          border-color: var(--glass-border);
-        }
-        .chat-item.active {
-          background: rgba(99, 102, 241, 0.15);
-          border-color: var(--primary-light);
-        }
-        .chat-info {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          overflow: hidden;
-        }
-        .chat-title {
-          font-size: 0.95rem;
-          font-weight: 600;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .chat-preview {
-          font-size: 0.8rem;
-          color: var(--text-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .delete-btn {
-          background: none;
-          border: none;
-          color: var(--text-muted);
-          padding: 0.5rem;
-          opacity: 0;
-          transition: 0.3s;
-        }
-        .chat-item:hover .delete-btn {
-          opacity: 1;
-          color: var(--accent);
-        }
-        .sidebar-footer {
-          padding-top: 1rem;
-          border-top: 1px solid var(--glass-border);
-          display: flex;
-          flex-direction: column;
-          gap: 0.85rem;
-        }
-        .footer-link {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          color: var(--text-muted);
-          text-decoration: none;
-          font-weight: 500;
-          transition: 0.3s;
-          background: none;
-          border: none;
-          padding: 0;
-          font-size: 1rem;
-          font-family: inherit;
-          cursor: pointer;
-          text-align: left;
-        }
-        .footer-link:hover {
-          color: var(--text-white);
-        }
-      `}</style>
         </aside>
     );
 }

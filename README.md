@@ -1,51 +1,32 @@
-🏋️ Fitness AI Assistant
+# 🏋️ GymAI: Fitness AI Assistant
 
-Fitness AI Assistant is a FastAPI-based conversational system that provides fitness guidance, muscle-gain advice, BMI-related insights, and general health support through a web-based chat interface.
+GymAI is an AI fitness coach. Users chat with a coach that knows their profile, training log, meals and
+health notes, answers from their own documents with citations, searches the web when needed, and builds
+downloadable workout and meal plans. The app tracks progress with charts, personal records, streaks and
+badges, and sends a weekly AI report.
 
-The system combines:
+## ✨ Features
 
-Rule-aware conversation flow (profile building)
+- **AI coach chat (Gemini):** remembers the user across all conversations, cites uploaded documents ([1], [2]) and web sources, and calls tools to update the profile, log weigh-ins and lifts, and generate PDF plans.
+- **Progress tracking:** weigh-ins and lifts with charts, estimated one-rep max, personal-record detection and celebration.
+- **Nutrition:** meal logging, including logging a meal from a photo (AI vision).
+- **Weekly AI report:** a summary of the week with a PDF in Plans.
+- **Achievements:** training and meal streaks, and badges whose rules admins define without code.
+- **Profile:** health notes (injuries, allergies, diet) the coach always follows, a history timeline, and data export (JSON or PDF).
+- **Plans:** every uploaded and generated document, with preview and download.
+- **Settings:** language (English/Arabic, RTL), units, coach style, training preferences, appearance (theme style, light/dark, accent and text colours, text size), account management.
+- **Admin portal:** overview dashboards, user management, coach prompt editing with version history, shared knowledge base, badge builder.
+- **Themes:** Gym floor, Iron and Bloom colour themes, picked automatically from the profile's gender or chosen in Settings.
 
-Generative AI responses (Gemini)
+## 🧱 Tech stack
 
-Persistent user profiles and chat history
-
-A lightweight frontend served directly by the backend
-
-✨ Key Features
-
-💬 AI Fitness Chatbot
-Natural language interaction for workouts, nutrition, and fitness questions.
-
-👤 User Profile Creation
-Collects age, weight, height, goal, and fitness level to personalize responses.
-
-🧠 Hybrid Intelligence
-
-Structured logic for profile flow
-
-Generative AI for flexible, open-ended guidance
-
-🗂 Conversation History Storage
-All user and assistant messages are stored in SQLite for analysis and replay.
-
-📊 Analysis Notebook
-Jupyter notebooks for inspecting user profiles and chat history.
-
-🌐 Single-Server Deployment
-Backend and frontend are served together via FastAPI.
-
-🧱 Tech Stack
-
-Backend: Python, FastAPI, JWT auth (python-jose + bcrypt)
-
-Frontend: React + Vite
-
-Database: SQLite
-
-AI Model: OpenAI (chat completions + embeddings), hybrid RAG via Qdrant (dense + TF-IDF sparse, RRF fusion)
-
-Analysis: Pandas, Matplotlib, Seaborn, Jupyter
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + Vite, lucide-react icons, custom CSS design system |
+| Backend | Java 21, Spring Boot 4 microservices, Spring Cloud Gateway, Spring Security (RS256 JWT) |
+| AI | Spring AI with Google Gemini (chat, vision, embeddings); Gemini Google Search grounding with a DuckDuckGo fallback |
+| Data | PostgreSQL, Redis, Qdrant (vectors), Neo4j (knowledge graph), MinIO (files) |
+| Infra | Docker Compose |
 
 🏗 Architecture (Spring Boot microservices)
 
@@ -82,8 +63,8 @@ Only the gateway is exposed to the host. The services are reachable only inside 
 |---|---|---|---|
 | **api-gateway** | 8080 | Single entry point. Routes `/api/v1/**` to the right service. Rejects invalid, expired or revoked tokens early. Rate-limits per user via Redis: 10 req/s by default, and a tighter bucket on `/chat/send`, since each message costs an LLM call. | Redis |
 | **user-service** | 8081 | Accounts and auth: register, login, logout, `/auth/me`. Signs RS256 JWTs and publishes the public key at `/.well-known/jwks.json`. Admins list users, change roles and delete users here. | Postgres `user_db` |
-| **profile-service** | 8082 | Fitness profile: age, gender, height, weight, goal, level. `GET/PUT /profile/me`, plus admin views and stats. | Postgres `profile_db` |
-| **chat-service** | 8083 | The assistant. Runs each chat turn, stores conversations and messages, and keeps short- and long-term memory. Admins can browse any user's chats and see stats. | Postgres `chat_db`, Redis |
+| **profile-service** | 8082 | Fitness profile, preferences and health notes, progress log (weigh-ins, lifts), meals, achievements and admin-defined badges, profile history. | Postgres `profile_db` |
+| **chat-service** | 8083 | The assistant. Runs each chat turn with citations and web search, keeps short- and long-term memory, analyses meal photos, writes weekly reports, and stores the admin-editable coach prompt. | Postgres `chat_db`, Redis |
 | **knowledge-service** | 8084 | Retrieval (internal only, `/internal/knowledge/*`). Indexes document chunks into Qdrant (dense + sparse hybrid search), extracts entity triples like `(Squat)-[TARGETS]->(Quadriceps)` into Neo4j (GraphRAG), and stores per-user long-term memories. `/retrieve` merges all three. | Qdrant, Neo4j |
 | **file-service** | 8085 | Upload: parse a PDF, chunk it, send it to knowledge-service for indexing. Generate: render a PDF, e.g. a workout plan from chat. Files live in MinIO; list, download, delete, plus admin views. | Postgres `file_db`, MinIO |
 | **charts-service** | 8086 | Dashboards. `/charts/me` for a user's own stats, `/charts/admin/overview` and `/charts/admin/users` for admins. It has no database: it calls the other services' stats endpoints and caches results in Redis briefly. | Redis (cache) |
@@ -98,9 +79,9 @@ Only the gateway is exposed to the host. The services are reachable only inside 
 1. chat-service loads the recent conversation window from Redis (or Postgres if it isn't cached).
 2. It fetches the user's profile from profile-service.
 3. It asks knowledge-service to `/retrieve` context: matching document chunks, related graph facts, and the user's long-term memories.
-4. It calls the OpenAI model with the system prompt, profile, context and history. The model can call **tools** that act as the chatting user: update the profile (profile-service) or generate a PDF document (file-service).
+4. It calls the Gemini model with the system prompt, the user's data snapshot (profile, health notes, training log, recent meals, plans, latest weekly report, memories from all conversations; cached in Redis and refreshed every 4 messages), the retrieved context and the history. The model can call **tools** that act as the chatting user: update the profile, log weigh-ins and lifts (profile-service), generate a PDF document (file-service), or search the web.
 5. The turn is saved to Postgres and the Redis window is updated. The reply returns, including links to any generated files.
-6. Every 6th user message, a background step extracts durable facts ("trains at home", "knee injury") and stores them in knowledge-service as long-term memory.
+6. Every 4th user message, a background step extracts durable facts ("trains at home", "knee injury") and saves them as long-term memory, which every later conversation sees.
 
 If retrieval, profile or the LLM is down, the user still gets a reply (a fallback message), and their message is still saved.
 
@@ -110,180 +91,40 @@ If retrieval, profile or the LLM is down, the user still gets a reply (a fallbac
 
 **Deleting a user.** When an admin deletes a user, user-service publishes `events:user-deleted` on Redis. profile, chat, file and knowledge services each listen for it and delete their own data for that user.
 
-🚀 Quick Start
+🚀 Quick start
 
-> The backend is now Spring Boot microservices. See **[docs/RUNNING.md](docs/RUNNING.md)** for how to run the app. The steps below are for the legacy Python backend.
+See **[docs/RUNNING.md](docs/RUNNING.md)** for the full guide. In short:
 
-1️⃣ Install dependencies (first time only)
-pip install -r requirements.txt
+```bash
+cp infra/.env.example infra/.env        # then set GEMINI_API_KEY
+cd infra && docker compose up -d --build
+cd ../frontend && npm install && npm run dev
+```
 
-2️⃣ Run the server
-python run_server.py
+Open **http://localhost:5173**. An admin account is created on first start (see RUNNING.md).
 
-3️⃣ Open the app in your browser
+🗂 Project structure
 
-Main UI: http://localhost:8000
+```
+backend/services/   api-gateway, user-, profile-, chat-, knowledge-, file-, charts-service (Spring Boot)
+frontend/           React + Vite app (src/components, src/index.css design system, public/ photos)
+infra/              docker-compose.yml, .env.example, Postgres init
+docs/               running guide, architecture notes, reference/ (source PDFs)
+```
 
-API Docs: http://localhost:8000/docs
+🔐 Environment variables
 
-Health Check: http://localhost:8000/health
+Set these in `infra/.env` (never committed):
 
-🩺 Health Check
-
-You can verify the server is running using:
-
-curl http://localhost:8000/health
-
-
-Expected response:
-
-{ "status": "ok" }
-
-🗂 Project Structure
-FITNESS-AI-ASSISTANT/
-├─ backend/
-│  ├─ agents/            # Modular fitness tools
-│  ├─ prompts/           # System + safety prompts
-│  ├─ app.py             # FastAPI entrypoint
-│  ├─ chat_logic.py      # Core conversation logic
-│  ├─ db.py              # Database access layer
-│  ├─ init_db.py         # Database initialization
-│  └─ schema.sql         # SQLite schema
-│
-├─ frontend/
-│  ├─ index.html
-│  ├─ script.js
-│  └─ style.css
-│
-├─ notebooks/
-│  └─ analysis.ipynb     # Profile & chat analysis
-│
-├─ run_server.py
-├─ requirements.txt
-├─ README.md
-├─ HOW_TO_RUN.md
-├─ START_APP.md
-└─ PROJECT_STATUS.md
-
-🗃 Database Design (Overview)
-
-The system uses SQLite with two core tables:
-
-users
-
-Stores user profile information:
-
-username
-
-age
-
-gender
-
-goal
-
-fitness level
-
-messages
-
-Stores conversation history:
-
-user / assistant role
-
-message text
-
-timestamp
-
-user reference (foreign key)
-
-This design enables:
-
-Persistent chat history
-
-Post-conversation analytics
-
-Dashboard-style visualization
-
-📊 Analysis & Visualization
-
-The notebooks/analysis.ipynb notebook allows you to:
-
-Load user profiles from SQLite
-
-Inspect conversation history
-
-Create bar charts and radar plots of user attributes
-
-Analyze interaction patterns between user and assistant
-
-This is useful for:
-
-Debugging AI behavior
-
-Academic reporting
-
-UX evaluation
-
-🔐 Environment Variables
-
-Create a .env file (not committed to GitHub):
-
-GEMINI_API_KEY=your_api_key_here
-
-
-⚠️ .env and *.db files are excluded via .gitignore.
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` | Google Gemini key. Without it the app runs, and chat replies with a fallback message. |
+| `GEMINI_MODEL` | Gemini model name (default `gemini-3.5-flash`). |
+| `WEB_SEARCH_ENABLED` | Lets the coach search the web (default `true`). |
+| `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` | The admin account created on first start. |
 
 🛠 Troubleshooting
-Site can’t be reached / connection refused
 
-Ensure the server is running (python run_server.py)
-
-Use localhost or 127.0.0.1, not 0.0.0.0
-
-Make sure port 8000 is free
-
-Disable VPNs or proxies blocking local traffic
-
-Gemini API errors
-
-Check API key validity
-
-Verify quota limits
-
-The app gracefully falls back with a user-friendly message
-
-🔄 Development Workflow
-
-To keep the repository clean:
-
-Create a new branch from work
-
-Make and test your changes locally
-
-Commit with a clear message:
-
-git commit -am "Improve profile flow handling"
-
-
-Push and open a pull request
-
-📌 Project Status
-
-This project is:
-
-✔ Fully functional
-
-✔ Modular and extensible
-
-✔ Suitable for academic submission or portfolio use
-
-Future improvements may include:
-
-User authentication
-
-Multi-user sessions
-
-Advanced analytics dashboard
-
-💪 Final Note
-
-Fitness AI Assistant demonstrates how structured logic and generative AI can work together to create reliable, user-friendly intelligent systems.
+- **Chat says it hit the usage limit:** the Gemini free tier allows about 20 requests a day. Wait for the daily reset or use a key with billing.
+- **A page shows "didn't load" after redeploying one service:** restart the gateway so it picks up the new container (`docker compose restart api-gateway`).
+- **Web search says it's unavailable:** Google Search grounding needs billing; the coach falls back to DuckDuckGo automatically.

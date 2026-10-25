@@ -39,6 +39,10 @@ public class ChatMessage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    /** JSON list of the sources an assistant reply cited; null when it cited none. */
+    @Column(columnDefinition = "TEXT")
+    private String citations;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -52,6 +56,11 @@ public class ChatMessage {
         this.content = content;
     }
 
+    public ChatMessage(Long conversationId, Long userId, Role role, String content, String citations) {
+        this(conversationId, userId, role, content);
+        this.citations = citations;
+    }
+
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
@@ -62,5 +71,6 @@ public class ChatMessage {
     public Long getUserId() { return userId; }
     public Role getRole() { return role; }
     public String getContent() { return content; }
+    public String getCitations() { return citations; }
     public Instant getCreatedAt() { return createdAt; }
 }

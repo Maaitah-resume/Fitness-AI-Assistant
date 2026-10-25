@@ -27,6 +27,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -67,14 +68,16 @@ class ChatFlowIntegrationTest {
         when(clients.retrieve(eq("tok-7"), anyString())).thenReturn(new RetrievedContext(
                 "[Document excerpts]\n(1) plan.pdf: Squat 3x8", List.of(new RetrievedChunk("Squat 3x8", "plan.pdf", "d1", 0.9)),
                 List.of(), List.of()));
-        when(model.reply(anyString(), anyList(), anyString(), any())).thenReturn("Do squats.", "Then lunges.");
+        when(model.reply(anyString(), anyList(), anyString(), any())).thenReturn("Do squats [S1].", "Then lunges.");
 
         // first turn creates the conversation
         String first = mvc.perform(post("/api/v1/chat/send").with(user(7, "USER", "tok-7"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"  What should I train today?  \"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.response").value("Do squats."))
+                .andExpect(jsonPath("$.data.response").value("Do squats [S1]."))
                 .andExpect(jsonPath("$.data.sources[0]").value("plan.pdf"))
+                .andExpect(jsonPath("$.data.citations[0].id").value("S1"))
+                .andExpect(jsonPath("$.data.citations[0].kind").value("document"))
                 .andExpect(jsonPath("$.data.degraded").value(false))
                 .andReturn().getResponse().getContentAsString();
         long chatId = ((Number) JsonPath.read(first, "$.data.chat_id")).longValue();
@@ -82,17 +85,18 @@ class ChatFlowIntegrationTest {
         // the system prompt carried profile + retrieved context
         ArgumentCaptor<String> system = ArgumentCaptor.forClass(String.class);
         verify(model).reply(system.capture(), anyList(), eq("What should I train today?"), any());
-        assertThat(system.getValue()).contains("goal=fat_loss", "plan.pdf: Squat 3x8");
+        assertThat(system.getValue()).contains("goal=fat_loss", "[S1] plan.pdf: Squat 3x8");
 
         // second turn sees the first turn as history
         mvc.perform(post("/api/v1/chat/send").with(user(7, "USER", "tok-7"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"And after?\",\"chat_id\":" + chatId + "}"))
-                .andExpect(jsonPath("$.data.response").value("Then lunges."));
+                .andExpect(jsonPath("$.data.response").value("Then lunges."))
+                .andExpect(jsonPath("$.data.citations").isEmpty());
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Turn>> history = ArgumentCaptor.forClass(List.class);
         verify(model).reply(anyString(), history.capture(), eq("And after?"), any());
         assertThat(history.getValue()).extracting(Turn::content)
-                .containsExactly("What should I train today?", "Do squats.");
+                .containsExactly("What should I train today?", "Do squats [S1].");
 
         // listing and history
         mvc.perform(get("/api/v1/chat/recent").with(user(7, "USER", "tok-7")))
@@ -101,7 +105,8 @@ class ChatFlowIntegrationTest {
         mvc.perform(get("/api/v1/chat/" + chatId + "/messages").with(user(7, "USER", "tok-7")))
                 .andExpect(jsonPath("$.data.messages.length()").value(4))
                 .andExpect(jsonPath("$.data.messages[0].role").value("user"))
-                .andExpect(jsonPath("$.data.messages[1].message").value("Do squats."));
+                .andExpect(jsonPath("$.data.messages[1].message").value("Do squats [S1]."))
+                .andExpect(jsonPath("$.data.messages[1].citations[0].title").value("plan.pdf"));
 
         // another user can't read, continue or delete it
         mvc.perform(get("/api/v1/chat/" + chatId + "/messages").with(user(8, "USER", "tok-8")))
@@ -155,7 +160,7 @@ class ChatFlowIntegrationTest {
     }
 
     @Test
-    void longTermMemoryRunsEverySixthUserMessage() throws Exception {
+    void longTermMemoryRunsEveryFourthUserMessage() throws Exception {
         when(model.reply(anyString(), anyList(), anyString(), any())).thenReturn("ok");
         Long chatId = null;
         for (int i = 1; i <= 7; i++) {
@@ -164,15 +169,15 @@ class ChatFlowIntegrationTest {
                             .content("{\"message\":\"msg " + i + "\"" + (chatId == null ? "" : ",\"chat_id\":" + chatId) + "}"))
                     .andReturn().getResponse().getContentAsString();
             chatId = ((Number) JsonPath.read(body, "$.data.chat_id")).longValue();
-            if (i < 6) {
-                verify(longTermMemory, never()).extractAndStore(anyString(), anyList());
+            if (i < 4) {
+                verify(longTermMemory, never()).extractAndStore(anyLong(), anyString(), anyList());
             }
         }
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Turn>> turns = ArgumentCaptor.forClass(List.class);
-        verify(longTermMemory, times(1)).extractAndStore(eq("tok-11"), turns.capture());
+        verify(longTermMemory, times(1)).extractAndStore(eq(11L), eq("tok-11"), turns.capture());
         assertThat(turns.getValue()).last().extracting(Turn::role).isEqualTo(ChatMessage.Role.ASSISTANT);
-        assertThat(turns.getValue()).hasSize(12);
+        assertThat(turns.getValue()).hasSize(8); // 4 user messages + 4 replies
     }
 
     @Test

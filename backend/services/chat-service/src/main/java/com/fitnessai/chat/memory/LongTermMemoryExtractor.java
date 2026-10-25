@@ -1,5 +1,6 @@
 package com.fitnessai.chat.memory;
 
+import com.fitnessai.chat.service.UserContextService;
 import com.fitnessai.chat.client.DownstreamClients;
 import com.fitnessai.chat.model.ChatMessage;
 import org.slf4j.Logger;
@@ -22,7 +23,7 @@ public class LongTermMemoryExtractor {
     private static final Logger log = LoggerFactory.getLogger(LongTermMemoryExtractor.class);
 
     /** Run extraction after every Nth user message in a conversation. */
-    public static final int EVERY_N_USER_MESSAGES = 6;
+    public static final int EVERY_N_USER_MESSAGES = 4;
 
     private static final String PROMPT = """
             From this conversation between a user and a fitness assistant, list durable facts about
@@ -39,10 +40,12 @@ public class LongTermMemoryExtractor {
 
     private final ChatClient chat;
     private final DownstreamClients clients;
+    private final UserContextService context;
 
-    public LongTermMemoryExtractor(ChatClient.Builder builder, DownstreamClients clients) {
+    public LongTermMemoryExtractor(ChatClient.Builder builder, DownstreamClients clients, UserContextService context) {
         this.chat = builder.build();
         this.clients = clients;
+        this.context = context;
     }
 
     public static boolean isDue(long userMessagesInConversation) {
@@ -50,7 +53,7 @@ public class LongTermMemoryExtractor {
     }
 
     @Async
-    public void extractAndStore(String token, List<ShortTermMemory.Turn> turns) {
+    public void extractAndStore(long userId, String token, List<ShortTermMemory.Turn> turns) {
         try {
             String transcript = turns.stream()
                     .map(t -> (t.role() == ChatMessage.Role.USER ? "User: " : "Assistant: ") + t.content())
@@ -63,8 +66,14 @@ public class LongTermMemoryExtractor {
                         .limit(20)
                         .toList();
                 if (!clean.isEmpty()) {
-                    clients.remember(token, clean);
-                    log.info("Stored {} long-term memory facts", clean.size());
+                    // every fact goes in the coach's context (all conversations); the vector copy serves retrieval
+                    int added = context.remember(userId, clean);
+                    try {
+                        clients.remember(token, clean);
+                    } catch (Exception e) {
+                        log.debug("Vector memory copy skipped: {}", e.getMessage());
+                    }
+                    log.info("Stored {} new long-term memory facts", added);
                 }
             }
         } catch (Exception e) {

@@ -32,7 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "jwt.key-dir=${java.io.tmpdir}/fitness-ai-test-keys"
+        "jwt.key-dir=${java.io.tmpdir}/fitness-ai-test-keys",
+        "seed.admin.enabled=false"
 })
 @AutoConfigureMockMvc
 class AuthFlowIntegrationTest {

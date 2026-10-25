@@ -62,4 +62,5 @@ public class User {
     public Instant getCreatedAt() { return createdAt; }
 
     public void setRole(Role role) { this.role = role; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 }

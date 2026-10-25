@@ -1,6 +1,7 @@
 package com.fitnessai.user.controller;
 
 import com.fitnessai.user.dto.ApiResponse;
+import com.fitnessai.user.dto.AuthDtos.AdminPasswordReset;
 import com.fitnessai.user.dto.AuthDtos.RoleUpdateRequest;
 import com.fitnessai.user.dto.AuthDtos.UserResponse;
 import com.fitnessai.user.dto.AuthDtos.UserStats;
@@ -40,6 +41,12 @@ public class AdminUserController {
     public ApiResponse<UserResponse> updateRole(@PathVariable long id, @Valid @RequestBody RoleUpdateRequest req,
                                                 @AuthenticationPrincipal Jwt admin) {
         return ApiResponse.ok(userService.updateRole(id, req.role(), Long.parseLong(admin.getSubject())));
+    }
+
+    @PatchMapping("/{id}/password")
+    public ApiResponse<Void> resetPassword(@PathVariable long id, @Valid @RequestBody AdminPasswordReset req) {
+        userService.resetPassword(id, req.newPassword());
+        return ApiResponse.ok("Password reset.", null);
     }
 
     @DeleteMapping("/{id}")

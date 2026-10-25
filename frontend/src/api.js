@@ -39,10 +39,13 @@ export function logout() {
             .catch(() => {});
     }
     localStorage.removeItem('token');
+    localStorage.removeItem('persona');
+    document.documentElement.removeAttribute('data-persona');
     localStorage.removeItem('user_id');
     localStorage.removeItem('username');
     localStorage.removeItem('user_email');
     localStorage.removeItem('role');
+    localStorage.removeItem('units');
 }
 
 // fetch() wrapper that attaches the bearer token and parses JSON.

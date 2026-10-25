@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import com.fitnessai.chat.repository.WeeklyReportRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
@@ -38,14 +39,18 @@ public class AppConfig {
     @Bean
     @ConditionalOnProperty(name = "events.redis.enabled", havingValue = "true", matchIfMissing = true)
     RedisMessageListenerContainer userDeletedListenerContainer(RedisConnectionFactory factory,
-                                                               ConversationStore store, ShortTermMemory memory) {
+                                                               ConversationStore store, ShortTermMemory memory,
+                                                               WeeklyReportRepository reports,
+                                                               com.fitnessai.chat.service.UserContextService userContext) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(factory);
         container.addMessageListener((message, pattern) -> {
             String body = new String(message.getBody(), StandardCharsets.UTF_8);
             try {
                 memory.clear(store.deleteAllForUser(Long.parseLong(body)));
-                log.info("Deleted conversations for removed user {}", body);
+                reports.deleteByUserId(Long.parseLong(body));
+                userContext.deleteForUser(Long.parseLong(body));
+                log.info("Deleted conversations, weekly reports and memories for removed user {}", body);
             } catch (NumberFormatException e) {
                 log.warn("Ignoring malformed user-deleted event: {}", body);
             }

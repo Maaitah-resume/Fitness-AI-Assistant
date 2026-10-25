@@ -22,6 +22,14 @@ public final class AuthDtos {
             String name) {
     }
 
+    public record PasswordChangeRequest(@NotBlank String currentPassword,
+                                        @NotBlank @Size(min = 8, max = 128) String newPassword) {
+    }
+
+    /** Deleting your own account asks for the password again. */
+    public record DeleteAccountRequest(@NotBlank String password) {
+    }
+
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {
     }
 
@@ -48,6 +56,10 @@ public final class AuthDtos {
             return new UserResponse(u.getId(), u.getUsername(), u.getEmail(), u.getName(),
                     u.getRole().name().toLowerCase(), u.getCreatedAt());
         }
+    }
+
+    /** Admin sets a new password for a user (e.g. one who forgot theirs). */
+    public record AdminPasswordReset(@NotBlank @Size(min = 8, max = 128) String newPassword) {
     }
 
     public record RoleUpdateRequest(@NotNull Role role) {

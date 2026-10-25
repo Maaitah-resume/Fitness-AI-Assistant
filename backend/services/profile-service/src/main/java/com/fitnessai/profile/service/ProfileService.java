@@ -4,6 +4,7 @@ import com.fitnessai.profile.dto.ProfileDtos.ProfileResponse;
 import com.fitnessai.profile.dto.ProfileDtos.ProfileStats;
 import com.fitnessai.profile.dto.ProfileDtos.ProfileUpdateRequest;
 import com.fitnessai.profile.model.Profile;
+import com.fitnessai.profile.repository.PreferencesRepository;
 import com.fitnessai.profile.repository.ProfileRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,9 +18,16 @@ import java.util.TreeMap;
 public class ProfileService {
 
     private final ProfileRepository profiles;
+    private final ProgressService progress;
+    private final PreferencesRepository preferences;
+    private final HistoryService history;
 
-    public ProfileService(ProfileRepository profiles) {
+    public ProfileService(ProfileRepository profiles, ProgressService progress, PreferencesRepository preferences,
+                          HistoryService history) {
+        this.history = history;
         this.profiles = profiles;
+        this.progress = progress;
+        this.preferences = preferences;
     }
 
     public ProfileResponse get(long userId) {
@@ -29,6 +37,7 @@ public class ProfileService {
     @Transactional
     public ProfileResponse upsert(long userId, ProfileUpdateRequest req) {
         Profile profile = profiles.findById(userId).orElseGet(() -> new Profile(userId));
+        history.recordChanges(userId, profile, req.goal(), req.level());
         req.applyTo(profile);
         return ProfileResponse.from(profiles.save(profile));
     }
@@ -40,6 +49,9 @@ public class ProfileService {
     @Transactional
     public void deleteForUser(long userId) {
         profiles.deleteById(userId);
+        progress.deleteForUser(userId);
+        preferences.deleteById(userId);
+        history.deleteForUser(userId);
     }
 
     public ProfileStats stats() {

@@ -1,5 +1,6 @@
 package com.fitnessai.profile.controller;
 
+import com.fitnessai.profile.service.HistoryService;
 import com.fitnessai.profile.dto.ApiResponse;
 import com.fitnessai.profile.dto.ProfileDtos.ProfileResponse;
 import com.fitnessai.profile.dto.ProfileDtos.ProfileStats;
@@ -24,14 +25,22 @@ import java.util.Map;
 public class ProfileController {
 
     private final ProfileService profiles;
+    private final HistoryService historyService;
 
-    public ProfileController(ProfileService profiles) {
+    public ProfileController(ProfileService profiles, HistoryService historyService) {
         this.profiles = profiles;
+        this.historyService = historyService;
     }
 
     @GetMapping("/me")
     public ApiResponse<ProfileResponse> me(@AuthenticationPrincipal Jwt jwt) {
         return ApiResponse.ok(profiles.get(userId(jwt)));
+    }
+
+    /** Weight since the start and a timeline of milestones, newest first. */
+    @GetMapping("/me/history")
+    public ApiResponse<HistoryService.History> history(@AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.ok(historyService.forUser(userId(jwt)));
     }
 
     @PutMapping("/me")

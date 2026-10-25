@@ -21,13 +21,13 @@ spring:
                 redis-rate-limiter.burstCapacity: 30
                 key-resolver: "#{@userKeyResolver}"
           routes:
-            # Each chat message costs an LLM call (plus tool calls), so it gets
-            # its own tighter bucket on top of the default one.
+            # Each chat message or meal photo costs an LLM call (plus tool calls), so they get
+            # their own tighter bucket on top of the default one.
             - id: chat-send
               order: -1
               uri: http://${CHAT_SERVICE_HOST:localhost}:${CHAT_SERVICE_PORT:8083}
               predicates:
-                - Path=/api/v1/chat/send
+                - Path=/api/v1/chat/send,/api/v1/chat/meals/analyze
               filters:
                 - name: RequestRateLimiter
                   args:
